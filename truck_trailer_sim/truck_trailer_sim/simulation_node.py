@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist, PoseStamped, TransformStamped, Quaternion
+from geometry_msgs.msg import Twist, PoseStamped, TransformStamped, Quaternion, PoseWithCovarianceStamped
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray, Float32
 from nav_msgs.msg import Odometry
@@ -75,6 +75,14 @@ class truckTrailerSimulator(Node):
             self.cmd_callback,
             10
         )
+
+        # Subscriber to set initial pose from Rviz2 2D Pose Estimate
+        self.create_subscription(
+            PoseWithCovarianceStamped,
+            '/initialpose',
+            self.initialpose_callback,
+            10
+        )
         
         # Simulation timer (20 Hz)
         self.dt = 0.05
@@ -90,6 +98,24 @@ class truckTrailerSimulator(Node):
         # msg.angular.z is steering command in radians
         max_steering = 50.0 * np.pi / 180.0  # 50 degrees
         self.delta0 = max(-max_steering, min(max_steering, msg.angular.z))
+
+    def initialpose_callback(self, msg):
+        """Set initial pose from Rviz2 2D Pose Estimate"""
+        self.state[0] = msg.pose.pose.position.x
+        self.state[1] = msg.pose.pose.position.y
+        
+        # Extract yaw from quaternion
+        q = msg.pose.pose.orientation
+        siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        yaw = math.atan2(siny_cosp, cosy_cosp)
+        
+        self.state[2] = yaw      # theta0 (truck orientation)
+        self.state[3] = yaw      # theta1 (trailer orientation)
+        
+        self.get_logger().warn(
+            f'Initial pose set to x: {self.state[0]:.2f}, y: {self.state[1]:.2f}, theta: {yaw:.2f} rad'
+        )
     
     def truck_trailer_dynamics(self, state, u):
         """
