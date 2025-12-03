@@ -6,20 +6,19 @@ from numpy import sin, cos, tan
 # =====================================================
 #             MODEL PARAMETERS
 # =====================================================
-L0 = 0.421   # tractor COM → front axle
-M0 = -0.045  # tractor COM → hitch   (negative → hitch behind COM)
-L1 = 0.495   # hitch → trailer COM
+L0 = 0.42   # tractor COM → front axle
+M0 = -0.02  # tractor COM → hitch   (negative → hitch behind COM)
+L1 = 0.537   # hitch → trailer COM
 
 # vehicle rectangle sizes (half-widths and lengths)
 TRACTOR_W = 0.35
 TRAILER_W = 0.35
 
 TRACTOR_FRONT = L0+0.07
-TRACTOR_BACK  = 0.055
+TRACTOR_BACK  = 0.06
 
-TRAILER_FRONT = L1+0.05
-TRAILER_BACK  = 0.05
-
+TRAILER_FRONT = L1+0.015
+TRAILER_BACK  = 0.064
 
 # =====================================================
 #             GEOMETRY FUNCTIONS

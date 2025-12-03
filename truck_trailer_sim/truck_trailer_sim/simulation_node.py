@@ -16,9 +16,9 @@ class truckTrailerSimulator(Node):
         self.get_logger().info('truck-Trailer Simulator Started')
         
         # System parameters (matching your real system)
-        self.L0 = 0.421   # truck wheelbase
-        self.M0 = -0.045   # hitch offset behind truck rear axle
-        self.L1 = 0.495   # hitch to trailer axle
+        self.L0 = 0.42   # truck wheelbase
+        self.M0 = -0.02   # hitch offset behind truck rear axle
+        self.L1 = 0.537   # hitch to trailer axle
         
         # State: [x1, y1, theta0, theta1]
         # x1, y1: trailer position
