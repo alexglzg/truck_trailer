@@ -86,9 +86,9 @@ class Objective(object):
     def truck_trailer_collision(
         self,
         states,         # (N,4) -> [x1,y1,th0,th1]
-        L0= 0.421,  # truck wheelbase
-        M0=-0.045,  # hitch offset behind truck rear axle
-        L1= 0.495,   # hitch → trailer axle
+        L0= 0.42,  # truck wheelbase
+        M0=-0.02,  # hitch offset behind truck rear axle
+        L1= 0.537,   # hitch → trailer axle
         W0= 0.35,    # truck width
         W1= 0.40,    # trailer width
         collision_cost = 1e6

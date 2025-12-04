@@ -2,6 +2,7 @@
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, PoseStamped, TransformStamped, Quaternion, PoseWithCovarianceStamped
+from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray, Float32
 from nav_msgs.msg import Odometry
@@ -9,6 +10,18 @@ from tf2_ros import TransformBroadcaster
 import numpy as np
 from numpy import sin, cos, tan
 import math
+from ament_index_python.packages import get_package_share_directory
+import yaml
+import torch
+
+import sys
+import os
+sys.path.append(os.path.dirname(__file__))  # adds current directory
+
+from mppi_torch.mppi_torch.mppi import MPPIPlanner
+from dynamics import Dynamics
+from objective import Objective
+
 
 class truckTrailerSimulator(Node):
     def __init__(self):
@@ -16,9 +29,10 @@ class truckTrailerSimulator(Node):
         self.get_logger().info('truck-Trailer Simulator Started')
         
         # System parameters (matching your real system)
-        self.L0 = 0.421   # truck wheelbase
-        self.M0 = -0.045   # hitch offset behind truck rear axle
-        self.L1 = 0.495   # hitch to trailer axle
+        self.L0 = 0.42   # truck wheelbase
+        self.M0 = -0.02   # hitch offset behind truck rear axle
+        self.L1 = 0.537   # hitch to trailer axle
+
         
         # State: [x1, y1, theta0, theta1]
         # x1, y1: trailer position
@@ -63,6 +77,7 @@ class truckTrailerSimulator(Node):
             10
         )
 
+
         self.joint_pub = self.create_publisher(JointState, 'joint_states', 10)
         
         # TF broadcaster
@@ -88,6 +103,7 @@ class truckTrailerSimulator(Node):
         self.dt = 0.05
         self.timer = self.create_timer(self.dt, self.simulation_step)
         self.last_time = self.get_clock().now()
+    
         
     def cmd_callback(self, msg):
         """Receive control commands"""
@@ -177,6 +193,7 @@ class truckTrailerSimulator(Node):
         self.publish_transforms(now)
         
         self.last_time = now
+
     
     def normalize_angle(self, angle):
         """Wrap angle to [-pi, pi]"""
@@ -185,7 +202,8 @@ class truckTrailerSimulator(Node):
         while angle < -np.pi:
             angle += 2 * np.pi
         return angle
-    
+
+
     def publish_state(self, now):
         """Publish state in same format as hardware interface"""
         x1, y1, th0, th1 = self.state
@@ -269,6 +287,16 @@ class truckTrailerSimulator(Node):
         
         # Send all transforms at once
         self.tf_broadcaster.sendTransform(transforms)
+    
+    def quaternion_to_yaw(self, q):
+        """
+        Convert quaternion (x,y,z,w) to yaw in radians.
+        """
+        x, y, z, w = q
+        siny_cosp = 2.0 * (w * z + x * y)
+        cosy_cosp = 1.0 - 2.0 * (y*y + z*z)
+        return math.atan2(siny_cosp, cosy_cosp)
+
 
 def main(args=None):
     rclpy.init(args=args)

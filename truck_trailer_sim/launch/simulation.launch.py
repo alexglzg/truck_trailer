@@ -14,6 +14,8 @@ def generate_launch_description():
     
     # Path to URDF file
     urdf_file = os.path.join(pkg_dir, 'urdf', 'truck_trailer.urdf')
+    rviz_config = os.path.join(pkg_dir, 'rviz', 'truck_trailer.rviz')
+
     
     # Fallback: try relative path if package path doesn't work
     if not os.path.exists(urdf_file):
@@ -32,8 +34,18 @@ def generate_launch_description():
         name='robot_state_publisher',
         parameters=[{
             'robot_description': robot_description_content,
-            'use_sim_time': False
+            'use_sim_time': False,
+            'publish_frequency': 30.0
+
         }],
+        output='screen'
+    )
+
+    # Joint State Publisher - publishes default joint positions
+    joint_state_publisher = Node(
+        package='joint_state_publisher',
+        executable='joint_state_publisher',
+        name='joint_state_publisher',
         output='screen'
     )
     
@@ -50,20 +62,38 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='map_odom_broadcaster',
-        arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom']
+        arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom'],
+        output='screen'
     )
+
+    # joint_state_publisher = Node(
+    #     package='joint_state_publisher_gui',
+    #     executable='joint_state_publisher_gui',
+    #     name='joint_state_publisher_gui',
+    #     output='screen',
+    # )
+
     
     # RViz (optional, uncomment to auto-launch)
-    # rviz = Node(
-    #     package='rviz2',
-    #     executable='rviz2',
-    #     name='rviz2',
-    #     output='screen'
-    # )
+    rviz = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        arguments=['-d', rviz_config],
+        output='screen',
+        # parameters=[{
+        # 'robot_description': robot_description_content
+        # }],
+        additional_env={
+        'DISPLAY': os.environ['DISPLAY'],
+        'QT_X11_NO_MITSHM': '1'
+        }   
+    )
     
     return LaunchDescription([
         robot_state_publisher,
+        joint_state_publisher,
         simulator,
-        # static_tf,  # Uncomment if you need odom frame
-        # rviz,       # Uncomment to auto-launch RViz
+        static_tf,  # Uncomment if you need odom frame
+        rviz,       # Uncomment to auto-launch RViz
     ])

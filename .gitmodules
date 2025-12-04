@@ -1,0 +1,3 @@
+[submodule "truck_trailer_sim/truck_trailer_sim/mppi_torch"]
+	path = truck_trailer_sim/truck_trailer_sim/mppi_torch
+	url = https://github.com/tud-amr/mppi_torch.git
