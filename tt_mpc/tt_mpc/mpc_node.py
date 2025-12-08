@@ -31,12 +31,12 @@ class DCBFNode(Node):
         self.TRAILER_BACK = 0.064
 
         self.V0_MAX = 0.5
-        self.DELTA0_MAX = np.radians(50)
-        self.BETA_MAX = np.radians(60)
+        self.DELTA0_MAX = np.radians(70)
+        self.BETA_MAX = np.radians(70)
 
-        self.N = 20          
+        self.N = 10          
         self.dt = 0.1        
-        self.N_cbf = 15 
+        self.N_cbf = 9 
         self.MAX_OBS = 4  # Fixed number of obstacles     
 
         self.Q = np.diag([10.0, 10.0, 0.0, 0.0])  
@@ -57,13 +57,7 @@ class DCBFNode(Node):
         # Subscribers
         self.create_subscription(Float64MultiArray, '/truck_trailer/state', self.state_cb, 10)
         self.create_subscription(PolytopeObstacleArray, '/obstacles', self.obs_cb, 10)
-        
-        qos_goal = QoSProfile(
-            reliability=QoSReliabilityPolicy.SYSTEM_DEFAULT,
-            durability=QoSDurabilityPolicy.SYSTEM_DEFAULT,
-            depth=10
-        )
-        self.create_subscription(PoseStamped, '/goal_pose', self.goal_cb, qos_goal)
+        self.create_subscription(PoseStamped, '/goal_pose', self.goal_cb, 10)
 
         # Internal State
         self.current_state = np.zeros(4) 
@@ -73,20 +67,12 @@ class DCBFNode(Node):
         self.x_goal = np.array([2.0, 2.0, 0.0, 0.0]) # Default Goal
 
         # --- Obstacle Storage ---
-        # We store obstacles as a list of (A, b) tuples in World Frame
-        # Initialize with 4 dummy obstacles far away
+        # Initialize with dummy obstacles far away
         self.active_obstacles = []
         dummy_A, dummy_b = self.get_polytope_from_box(0.1, 0.1, 0.1)
-        # Move them far away (x=100, x=101, etc)
         for i in range(self.MAX_OBS):
             A_w, b_w = self.transform_polytope(dummy_A, dummy_b, 100.0 + i*2.0, 100.0, 0.0)
             self.active_obstacles.append((A_w, b_w))
-
-        # Add one real test obstacle at (1.0, 1.0) for immediate testing
-        obs_size = (0.6, 0.4)
-        A_local, b_local = self.get_polytope_from_box(obs_size[1]/2, obs_size[0]/2, obs_size[0]/2)
-        A_real, b_real = self.transform_polytope(A_local, b_local, 1.0, 1.0, 0.0)
-        self.active_obstacles[0] = (A_real, b_real)
 
         self.get_logger().info("Building MPC (Fatrop) with 4 Obstacles...")
         self.setup_mpc()
@@ -144,9 +130,8 @@ class DCBFNode(Node):
         A_tractor_dm = ca.DM(A_tractor_np)
         A_trailer_dm = ca.DM(A_trailer_np)
         
-        # 2. VARIABLES (PHASE 1)
+        # 2. VARIABLES
         X, U = [], []
-        # These will be lists of lists: Lambda_tractor[k][obs_i]
         Lambda_tractor, Mu_tractor, Omega_tractor = [], [], []
         Lambda_trailer, Mu_trailer, Omega_trailer = [], [], []
         
@@ -155,7 +140,6 @@ class DCBFNode(Node):
             U.append(opti.variable(2))
             
             if k < self.N_cbf:
-                # Per-stage lists
                 l_tr_k, m_tr_k, o_tr_k = [], [], []
                 l_tl_k, m_tl_k, o_tl_k = [], [], []
                 
@@ -178,15 +162,15 @@ class DCBFNode(Node):
         self.par_X_ref = opti.parameter(4)
         self.par_U_prev = opti.parameter(2)
         
-        # Obstacle Params: Stacked (4*MAX_OBS, 2) and (4*MAX_OBS)
+        # Obstacle Params
         self.par_A_obs = opti.parameter(4 * self.MAX_OBS, 2)
         self.par_b_obs = opti.parameter(4 * self.MAX_OBS)
         
-        # Initial separation parameters (one per obstacle)
+        # Separation params
         self.par_h0_tractor = opti.parameter(self.MAX_OBS)
         self.par_h0_trailer = opti.parameter(self.MAX_OBS)
 
-        # 4. CONSTRAINTS (PHASE 2)
+        # 4. CONSTRAINTS
         cost = 0
         for k in range(self.N):
             xk = X[k]; uk = U[k]; x_next = X[k+1]
@@ -403,7 +387,10 @@ class DCBFNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = DCBFNode()
-    rclpy.spin(node)
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
     node.destroy_node()
     rclpy.shutdown()
 
