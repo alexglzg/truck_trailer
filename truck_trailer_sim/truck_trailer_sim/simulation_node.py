@@ -11,16 +11,16 @@ import numpy as np
 from numpy import sin, cos, tan
 import math
 from ament_index_python.packages import get_package_share_directory
-import yaml
-import torch
+# import yaml
+# import torch
 
 import sys
 import os
 sys.path.append(os.path.dirname(__file__))  # adds current directory
 
-from mppi_torch.mppi_torch.mppi import MPPIPlanner
-from dynamics import Dynamics
-from objective import Objective
+# from mppi_torch.mppi_torch.mppi import MPPIPlanner
+# from dynamics import Dynamics
+# from objective import Objective
 
 
 class truckTrailerSimulator(Node):
@@ -108,11 +108,11 @@ class truckTrailerSimulator(Node):
     def cmd_callback(self, msg):
         """Receive control commands"""
         # Linear velocity (m/s)
-        self.V0 = max(-0.2, min(0.2, msg.linear.x))
+        self.V0 = max(-0.5, min(0.5, msg.linear.x))
         
         # Steering angle (rad)
         # msg.angular.z is steering command in radians
-        max_steering = 50.0 * np.pi / 180.0  # 50 degrees
+        max_steering = 90.0 * np.pi / 180.0  # 90 degrees
         self.delta0 = max(-max_steering, min(max_steering, msg.angular.z))
 
     def initialpose_callback(self, msg):
