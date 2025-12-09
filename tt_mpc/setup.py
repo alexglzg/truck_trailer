@@ -24,6 +24,7 @@ setup(
     entry_points={
         'console_scripts': [
             'mpc_node = tt_mpc.mpc_node:main',
+            'obstacle_publisher = tt_mpc.obstacle_publisher:main',
         ],
     },
 )

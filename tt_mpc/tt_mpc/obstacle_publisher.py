@@ -84,11 +84,11 @@ class ObstaclePublisher(Node):
             
             marker.pose.position.x = x
             marker.pose.position.y = y
-            marker.pose.position.z = 0.25 # Slightly elevated
+            marker.pose.position.z = 0.05 # Slightly elevated
             
             marker.scale.x = w
             marker.scale.y = h
-            marker.scale.z = 0.5 # Height
+            marker.scale.z = 0.1 # Height
             
             marker.color.r = 1.0
             marker.color.g = 0.0
