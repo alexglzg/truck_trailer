@@ -39,7 +39,8 @@ class Dynamics:
         new_th1 = th1 + dth1 * self._dt
         new_th0 = th0 + dth0 * self._dt
         
-        new_states = states
+        # new_states = states
+        new_states = states.clone()
 
         new_states[:, 0] = new_x1
         new_states[:, 1] = new_y1

@@ -110,10 +110,17 @@ class truckTrailerSimulator(Node):
         # Linear velocity (m/s)
         self.V0 = max(-0.5, min(0.5, msg.linear.x))
         
-        # Steering angle (rad)
-        # msg.angular.z is steering command in radians
-        max_steering = 90.0 * np.pi / 180.0  # 90 degrees
-        self.delta0 = max(-max_steering, min(max_steering, msg.angular.z))
+        # # Steering angle (rad)
+        # # msg.angular.z is steering command in radians
+        # max_steering = 90.0 * np.pi / 180.0  # 90 degrees
+        # self.delta0 = max(-max_steering, min(max_steering, msg.angular.z))
+
+        omega = msg.angular.z
+
+        if abs(self.V0) > 0.01:
+            self.delta0 = math.atan((omega * self.L0) / self.V0)
+        else:
+            self.delta0 = 0.0
 
     def initialpose_callback(self, msg):
         """Set initial pose from Rviz2 2D Pose Estimate"""

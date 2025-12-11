@@ -33,7 +33,7 @@ class DCBFNode(Node):
 
         # --- ROS Setup ---
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
-        self.traj_pub = self.create_publisher(Path, '/mpc_trajectory', 10)
+        self.traj_pub = self.create_publisher(Path, '/planned_path', 10)
         self.poly_pub = self.create_publisher(MarkerArray, '/mpc_polytopes', 10)
         
         self.create_subscription(Float64MultiArray, '/truck_trailer/state', self.state_cb, 10)
@@ -339,8 +339,7 @@ class DCBFNode(Node):
             self.u_prev = u_opt
             
             # 5. Publish
-            msg = Twist(); msg.linear.x = float(u_opt[0]); msg.angular.z = float(u_opt[1])
-            self.cmd_pub.publish(msg)
+            self.publish_action(u_opt)
             self.publish_path(traj)
             # log info
             self.get_logger().info(f"MPC Control: v0={u_opt[0]:.3f}, delta0={np.degrees(u_opt[1]):.2f} deg")
@@ -349,6 +348,24 @@ class DCBFNode(Node):
             self.get_logger().error(f"MPC Error: {e}")
             self.cmd_pub.publish(Twist())
             self.warm_start_val = np.zeros(self.vars_shape) # Reset on fail
+
+    def publish_action(self, action):        
+        lin_vel = action[0]
+        steer_angle = action[1]
+
+        ang_vel = lin_vel * tan(steer_angle) / self.L0  # omega = v * tan(delta) / L
+
+        # Create Twist message
+        msg = Twist()
+        msg.linear.x = lin_vel
+        msg.linear.y = 0.0
+        msg.linear.z = 0.0
+        msg.angular.x = 0.0
+        msg.angular.y = 0.0
+        msg.angular.z = ang_vel
+
+        # Publish
+        self.cmd_pub.publish(msg)
 
     def publish_path(self, traj):
         msg = Path(); msg.header.frame_id="map"; msg.header.stamp=self.get_clock().now().to_msg()

@@ -90,7 +90,7 @@ class Objective(object):
         M0=-0.02,  # hitch offset behind truck rear axle
         L1= 0.537,   # hitch → trailer axle
         W0= 0.35,    # truck width
-        W1= 0.40,    # trailer width
+        W1= 0.35,    # trailer width
         collision_cost = 1e6
     ):
         """

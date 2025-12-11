@@ -5,6 +5,7 @@ from ament_index_python.packages import get_package_share_directory
 from std_msgs.msg import Float64MultiArray, Float32
 from nav_msgs.msg import OccupancyGrid
 from geometry_msgs.msg import Twist, PoseStamped, TransformStamped, Quaternion, PoseWithCovarianceStamped
+from nav_msgs.msg import Path
 
 import yaml
 import math
@@ -56,6 +57,7 @@ class truckTrailerPlanner(Node):
         # theta1: trailer orientation
         self.state = np.array([0.0, 0.0, 0.0, 0.0])
         self.cmd_pub   = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.path_pub  = self.create_publisher(Path, '/planned_path', 10)
 
         # Planner will be initialized once map is received
         self.planner_initialized = False
@@ -69,15 +71,29 @@ class truckTrailerPlanner(Node):
     
 
     def goal_callback(self, msg: PoseStamped):
-        # extract goal x,y from RViz click
         x = msg.pose.position.x
         y = msg.pose.position.y
         self.goal = [x, y]
         self.get_logger().info(f"Received new goal from RViz: {self.goal}")
 
-        # If the map is already received and planner not initialized, initialize
         if self.map_received and not self.planner_initialized:
             self.initialize_planner()
+            
+        elif self.planner_initialized:
+            self.get_logger().info("Updating planner goal...")
+            
+            # 1. Update the goal tensor in the Objective
+            # Note: We match the device ('cpu') and format used in Objective.__init__
+            device = self.cfg['device']
+            new_goal_tensor = torch.tensor(self.goal, device=device, dtype=torch.float32).unsqueeze(0)
+            self.objective.nav_goal = new_goal_tensor
+            
+            # 2. Reset the MPPI "Warm Start"
+            # MPPI remembers the previous trajectory (mean_action) to speed up convergence.
+            # When the goal changes dramatically, we must wipe this memory, 
+            # otherwise it tries to bend the old path instead of finding a new one.
+            if hasattr(self.planner, 'mean_action'):
+                self.planner.mean_action.zero_()
         
     
     def map_callback(self, msg):
@@ -108,7 +124,9 @@ class truckTrailerPlanner(Node):
     def publish_action(self, action):        
         # Convert to float (in case it's a tensor)
         lin_vel = float(action[0])
-        ang_vel = float(action[1])
+        steer_angle = float(action[1])
+
+        ang_vel = lin_vel * math.tan(steer_angle) / Dynamics()._L0  # omega = v * tan(delta) / L
 
         # Create Twist message
         msg = Twist()
@@ -121,6 +139,35 @@ class truckTrailerPlanner(Node):
 
         # Publish
         self.cmd_pub.publish(msg)
+
+    def publish_path(self, path_points):
+        path_msg = Path()
+        path_msg.header.frame_id = "map"
+        path_msg.header.stamp = self.get_clock().now().to_msg()
+        
+        for i in range(path_points.shape[0]):
+            point = path_points[i]
+            pose = PoseStamped()
+            pose.header = path_msg.header
+            
+            # --- CHANGE THESE LINES ---
+            # Cast numpy types to python float to satisfy ROS 2 Foxy
+            pose.pose.position.x = float(point[0]) 
+            pose.pose.position.y = float(point[1])
+            # --------------------------
+            
+            pose.pose.position.z = 0.0
+            
+            # Use index 3 for theta (orientation)
+            theta = float(point[3])
+            quat = Quaternion()
+            quat.z = math.sin(theta / 2.0)
+            quat.w = math.cos(theta / 2.0)
+            pose.pose.orientation = quat
+            
+            path_msg.poses.append(pose)
+            
+        self.path_pub.publish(path_msg)
     
     def run_planner(self):
         if self.planner is None:
@@ -128,6 +175,10 @@ class truckTrailerPlanner(Node):
         
         action = self.planner.command(self.state)
         self.publish_action(action)
+
+        best_states, _ = self.planner.get_n_best_samples(1)
+        path_np = best_states.squeeze(0).cpu().numpy()
+        self.publish_path(path_np)
 
         # self.get_logger().info(f'Planner output: {action}')
 
@@ -150,7 +201,7 @@ class truckTrailerPlanner(Node):
         # self.goal = [2, 2]
 
         # Define objective with the received map
-        objective = Objective(
+        self.objective = Objective(
             goal=self.goal,
             pre_processed_map=self.map_data,
             device=self.cfg["device"]
@@ -161,14 +212,13 @@ class truckTrailerPlanner(Node):
             cfg=self.cfg["mppi"],
             nx=4,
             dynamics=self.dynamics.step,
-            running_cost=objective.compute_running_cost,
+            running_cost=self.objective.compute_running_cost,
         )
 
         self.planner_initialized = True
         self.get_logger().info("MPPI planner initialized successfully.")
 
-    
-    def preprocess_occupancy_grid(self, grid_msg, device='cuda:0'):
+    def preprocess_occupancy_grid(self, grid_msg, device='cuda'):
         """
         Convert OccupancyGrid -> PyTorch tensor + metadata.
         """

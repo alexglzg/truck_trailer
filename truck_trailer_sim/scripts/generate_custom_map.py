@@ -224,7 +224,7 @@ def save_map_and_yaml(
     grid,
     filename_prefix,
     resolution,
-    origin=(-1.2, 5.3, -1.57)
+    origin=(-1.0, 5.0, -1.57)
 ):
     """
     Saves the occupancy grid map as a PGM file and its configuration as a YAML file.
