@@ -65,8 +65,8 @@ class truckTrailerPlanner(Node):
         self.map_received = False
         self.goal = None
 
-        # Simulation timer (20 Hz)
-        self.dt = 0.05
+        # Simulation timer (10 Hz)
+        self.dt = 0.1
         self.timer = self.create_timer(self.dt, self.run_planner)
     
 

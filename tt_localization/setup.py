@@ -20,6 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+        	'tt_localization_node = tt_localization.estimator:main',
         ],
     },
 )
