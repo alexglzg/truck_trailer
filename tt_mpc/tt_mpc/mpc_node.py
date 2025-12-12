@@ -17,19 +17,31 @@ class DCBFNode(Node):
         super().__init__('dcbf_mpc_node')
         
         # --- Model & Tuning ---
-        self.L0 = 0.42; self.M0 = -0.02; self.L1 = 0.537  
-        self.TRACTOR_W = 0.35; self.TRAILER_W = 0.35
-        self.TRACTOR_FRONT = self.L0 + 0.07; self.TRACTOR_BACK = 0.06
-        self.TRAILER_FRONT = self.L1 + 0.015; self.TRAILER_BACK = 0.064
+        self.L0 = 0.42
+        self.M0 = -0.02
+        self.L1 = 0.537  
+        self.TRACTOR_W = 0.35
+        self.TRAILER_W = 0.35
+        self.TRACTOR_FRONT = self.L0 + 0.07
+        self.TRACTOR_BACK = 0.06
+        self.TRAILER_FRONT = self.L1 + 0.015
+        self.TRAILER_BACK = 0.064
 
-        self.V0_MAX = 0.5; self.DELTA0_MAX = np.radians(50); self.BETA_MAX = np.radians(60)
-        self.N = 10; self.dt = 0.1; self.N_cbf = 9; self.MAX_OBS = 4   
+        self.V0_MAX = 0.5
+        self.DELTA0_MAX = np.radians(50)
+        self.BETA_MAX = np.radians(60)
+        self.N = 10
+        self.dt = 0.1
+        self.N_cbf = 9
+        self.MAX_OBS = 4
 
         self.Q = np.diag([10.0, 10.0, 0.0, 0.0])  
         self.R = np.diag([0.1, 1.0])               
         self.R_smooth = np.diag([0.1, 0.5])        
         self.Q_terminal = self.Q * 10
-        self.gamma = 0.9; self.margin_dist = 0.2; self.p_omega = 10.0
+        self.gamma = 0.9
+        self.margin_dist = 0.2
+        self.p_omega = 10.0
 
         # --- ROS Setup ---
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
@@ -46,9 +58,8 @@ class DCBFNode(Node):
         self.u_prev = np.zeros(2)
         self.x_goal = np.array([2.0, 2.0, 0.0, 0.0])
         
-        # Storage for Warm Start (The "Guess" vector)
         self.warm_start_val = None 
-        self.vars_shape = None # To know size of warm start vector
+        self.vars_shape = None
 
         # --- Obstacles ---
         self.active_obstacles = []
@@ -221,8 +232,11 @@ class DCBFNode(Node):
             # Bounds
             opti.subject_to(opti.bounded(-self.V0_MAX, uk[0], self.V0_MAX))
             opti.subject_to(opti.bounded(-self.DELTA0_MAX, uk[1], self.DELTA0_MAX))
-            opti.subject_to(opti.bounded(-self.BETA_MAX, xk[3]-xk[2], self.BETA_MAX))
-            
+            # opti.subject_to(opti.bounded(-self.BETA_MAX, xk[3]-xk[2], self.BETA_MAX))
+            # beta should be wrapped before applying bounds
+            beta_wrapped = ca.atan2(ca.sin(xk[3]-xk[2]), ca.cos(xk[3]-xk[2]))
+            opti.subject_to(opti.bounded(-self.BETA_MAX, beta_wrapped, self.BETA_MAX))
+
             # CBF
             if k < self.N_cbf:
                 x1n, y1n, th1n, th0n = x_next_model[0], x_next_model[1], x_next_model[2], x_next_model[3]
