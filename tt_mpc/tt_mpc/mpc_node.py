@@ -28,10 +28,10 @@ class DCBFNode(Node):
         self.TRAILER_BACK = 0.064
 
         self.V0_MAX = 0.5
-        self.DELTA0_MAX = np.radians(50)
-        self.BETA_MAX = np.radians(60)
+        self.DELTA0_MAX = 1.0#np.radians(50)
+        self.BETA_MAX = np.radians(90)
         self.N = 10
-        self.dt = 0.1
+        self.dt = 0.2
         self.N_cbf = 9
         self.MAX_OBS = 4
 
@@ -73,7 +73,7 @@ class DCBFNode(Node):
         self.setup_mpc_function()
         self.get_logger().info("MPC Compiled & Ready.")
 
-        self.timer = self.create_timer(0.1, self.control_loop)
+        self.timer = self.create_timer(self.dt, self.control_loop)
 
     # ... [Visualization Helpers omitted for brevity, identical to previous] ...
     def get_vehicle_corners(self, x, y, theta, w, lf, lb):
@@ -234,8 +234,8 @@ class DCBFNode(Node):
             opti.subject_to(opti.bounded(-self.DELTA0_MAX, uk[1], self.DELTA0_MAX))
             # opti.subject_to(opti.bounded(-self.BETA_MAX, xk[3]-xk[2], self.BETA_MAX))
             # beta should be wrapped before applying bounds
-            beta_wrapped = ca.atan2(ca.sin(xk[3]-xk[2]), ca.cos(xk[3]-xk[2]))
-            opti.subject_to(opti.bounded(-self.BETA_MAX, beta_wrapped, self.BETA_MAX))
+            # beta_wrapped = ca.atan2(ca.sin(xk[3]-xk[2]), ca.cos(xk[3]-xk[2]))
+            # opti.subject_to(opti.bounded(-self.BETA_MAX, beta_wrapped, self.BETA_MAX))
 
             # CBF
             if k < self.N_cbf:

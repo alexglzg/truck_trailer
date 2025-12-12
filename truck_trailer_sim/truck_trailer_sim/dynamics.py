@@ -23,8 +23,8 @@ class Dynamics:
         beta = th0 - th1
 
         # wrap angle between -pi and pi and constraint between -pi/2 and pi/2
-        beta = (beta + torch.pi) % (2 * torch.pi) - torch.pi
-        beta = torch.clamp(beta, -torch.pi/2 + 0.01, torch.pi/2 - 0.01)
+        # beta = (beta + torch.pi) % (2 * torch.pi) - torch.pi
+        # beta = torch.clamp(beta, -torch.pi/2 + 0.01, torch.pi/2 - 0.01)
         
         # Trailer velocity (kinematic relation)
         V1 = V0 * torch.cos(beta) + self._M0 * (V0 * torch.tan(delta0) / self._L0) * torch.sin(beta)

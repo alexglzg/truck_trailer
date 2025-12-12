@@ -100,7 +100,7 @@ class truckTrailerSimulator(Node):
         )
         
         # Simulation timer (20 Hz)
-        self.dt = 0.05
+        self.dt = 0.1
         self.timer = self.create_timer(self.dt, self.simulation_step)
         self.last_time = self.get_clock().now()
     
@@ -119,8 +119,8 @@ class truckTrailerSimulator(Node):
 
         if abs(self.V0) > 0.01:
             self.delta0 = math.atan((omega * self.L0) / self.V0)
-        else:
-            self.delta0 = 0.0
+        # else:
+        #     self.delta0 = 0.0
 
     def initialpose_callback(self, msg):
         """Set initial pose from Rviz2 2D Pose Estimate"""
