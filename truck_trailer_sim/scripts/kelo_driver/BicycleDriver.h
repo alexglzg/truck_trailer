@@ -3,13 +3,23 @@
 
 #include <string>
 #include <vector>
+#include <fstream>
 #include <boost/thread.hpp>
 
 extern "C" {
-#include "kelo_tulip/soem/ethercat.h"
+#include "kelo_tulip/soem/ethercattype.h"
 #include "kelo_tulip/EtherCATModule.h"
 #include "kelo_tulip/KeloDriveAPI.h"
+#include "nicdrv.h"
+#include "kelo_tulip/soem/ethercatbase.h"
+#include "kelo_tulip/soem/ethercatmain.h"
+#include "kelo_tulip/soem/ethercatconfig.h"
+#include "kelo_tulip/soem/ethercatcoe.h"
+#include "kelo_tulip/soem/ethercatdc.h"
+#include "kelo_tulip/soem/ethercatprint.h"
 }
+
+#include "kelo_tulip/Utils.h"
 #include "kelo_tulip/WheelConfig.h"
 
 namespace kelo {
@@ -22,7 +32,6 @@ public:
     bool initEthercat();
     void closeEthercat();
 
-    // Targets for the cyclic thread
     volatile float target_vL;
     volatile float target_vR;
 
@@ -30,7 +39,7 @@ public:
 
 private:
     void ethercatHandler(); 
-    
+
     std::string device;
     std::vector<kelo::WheelConfig>* wheelConfigs;
     int nWheels;
@@ -38,9 +47,7 @@ private:
     volatile bool stopThread;
     boost::thread* ethercatThread;
 
-    // --- FULL SOEM STACK INITIALIZATION ---
-    ecx_contextt ecx_context;
-    ecx_portt ecx_port;
+    // FULL SOEM CONTEXT (Exactly like original)
     ec_slavet ecx_slave[EC_MAXSLAVE];
     int ecx_slavecount;
     ec_groupt ec_group[EC_MAXGROUP];
@@ -54,7 +61,9 @@ private:
     ec_eepromSMt ec_SM;
     ec_eepromFMMUt ec_FMMU;
     boolean EcatError;
-    int64 ec_DCtime;
+    int64 ec_DCtime;               
+    ecx_portt ecx_port;
+    ecx_contextt ecx_context;
     char IOmap[4096];
 };
 
