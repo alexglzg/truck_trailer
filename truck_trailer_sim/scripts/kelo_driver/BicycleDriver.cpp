@@ -7,7 +7,7 @@ BicycleDriver::BicycleDriver(std::string device, std::vector<kelo::WheelConfig>*
     : device(device), wheelConfigs(configs), nWheels(nWheels), stopThread(false), 
       target_vL(0.0f), target_vR(0.0f), ethercatThread(NULL) {
     
-    // SOEM Pointer Initialization
+    // Initialize SOEM pointers (Absolute must for stability)
     ecx_context.port = &ecx_port;
     ecx_context.slavelist = &ecx_slave[0];
     ecx_context.slavecount = &ecx_slavecount;
@@ -31,8 +31,10 @@ BicycleDriver::BicycleDriver(std::string device, std::vector<kelo::WheelConfig>*
 bool BicycleDriver::initEthercat() {
     if (!ecx_init(&ecx_context, const_cast<char*>(device.c_str()))) return false;
     if (ecx_config_init(&ecx_context, TRUE) <= 0) return false;
+    
     ecx_config_map_group(&ecx_context, IOmap, 0);
     
+    // Request Operational State
     ecx_slave[0].state = EC_STATE_OPERATIONAL;
     ecx_writestate(&ecx_context, 0);
     ecx_statecheck(&ecx_context, 0, EC_STATE_OPERATIONAL, EC_TIMEOUTSTATE);
@@ -52,21 +54,24 @@ void BicycleDriver::ethercatHandler() {
             txpdo1_t* tx_data = (txpdo1_t*) ecx_slave[slave].inputs;
             rxpdo1_t* rx_data = (rxpdo1_t*) ecx_slave[slave].outputs;
 
-            // Handshake: Use the exact timestamp logic from PlatformDriver.cpp
-            rx_data->timestamp = tx_data->sensor_ts + 100 * 1000; 
+            // 1. Precise Timing handshake (Match original driver exactly)
+            rx_data->timestamp = tx_data->sensor_ts + 100000; 
 
-            // Enable Sequence: ENABLE1 | ENABLE2 | VELOCITY_MODE
-            // In the original header: COM1_ENABLE1 (1), COM1_ENABLE2 (2), COM1_MODE_VELOCITY (4)
+            // 2. Command: Bit 0 (Enable1), Bit 1 (Enable2), Bit 2 (Velocity Mode)
+            // We use 7. If resistance is still weak, the hardware might need an 
+            // additional 'Status' bit from rx_data->command2.
             rx_data->command1 = 7; 
-            rx_data->command2 = 0; // Ensure second command word is cleared
+            rx_data->command2 = 0;
 
-            // Standard Current Limits (Amps)
+            // 3. Torque/Current Limits - Setting these to 20.0f provides the "Lock"
             rx_data->limit1_p = 20.0f; rx_data->limit1_n = -20.0f;
             rx_data->limit2_p = 20.0f; rx_data->limit2_n = -20.0f;
 
-            // Apply calculated targets
+            // 4. THE SIGN TEST
+            // If the motors are fighting (weak resistance), one needs to be flipped.
+            // In Kelo Hubs, the mechanical mirroring requires one setpoint to be inverted.
             rx_data->setpoint1 = target_vL;
-            rx_data->setpoint2 = -target_vR; // Mirrored mounting inversion
+            rx_data->setpoint2 = -target_vR; 
         }
 
         ecx_send_processdata(&ecx_context);
@@ -90,4 +95,4 @@ void BicycleDriver::closeEthercat() {
 
 BicycleDriver::~BicycleDriver() { closeEthercat(); }
 
-} // namespace kelo
+}
