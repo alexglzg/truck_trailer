@@ -92,8 +92,8 @@ def generate_launch_description():
     
     return LaunchDescription([
         robot_state_publisher,
-        joint_state_publisher,
+        # joint_state_publisher,
         simulator,
         static_tf,  # Uncomment if you need odom frame
-        rviz,       # Uncomment to auto-launch RViz
+        # rviz,       # Uncomment to auto-launch RViz
     ])

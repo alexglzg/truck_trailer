@@ -34,93 +34,48 @@ class truckTrailerSimulator(Node):
         self.L1 = 0.537   # hitch to trailer axle
 
         
-        # State: [x1, y1, theta0, theta1]
+        # State: [x1, y1, theta0, theta1, phi]
         # x1, y1: trailer position
         # theta0: truck orientation
         # theta1: trailer orientation
-        self.state = np.array([0.0, 0.0, 0.0, 0.0])
+        # phi: front wheel steering angle
+        self.state = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
         
         # Control inputs
-        self.V0 = 0.0      # truck velocity
-        self.delta0 = 0.0  # steering angle
+        self.vk = 0.0      # kelo velocity
+        self.wk = 0.0      # kelo angular velocity
         
-        # Publishers (matching your hardware interface topics)
-        self.state_pub = self.create_publisher(
-            Float64MultiArray,
-            '/truck_trailer/state',
-            10
-        )
-        
-        self.trailer_pose_pub = self.create_publisher(
-            PoseStamped,
-            '/truck_trailer/trailer_pose',
-            10
-        )
-        
-        self.truck_pose_pub = self.create_publisher(
-            PoseStamped,
-            '/truck_trailer/truck_pose',
-            10
-        )
-        
-        # Also publish encoder angle (simulated)
-        self.encoder_pub = self.create_publisher(
-            Float32,
-            '/encoder/angle',
-            10
-        )
-        
-        # Odometry for RViz
-        self.odom_pub = self.create_publisher(
-            Odometry,
-            '/odom',
-            10
-        )
-
-
+        # Publishers 
+        self.state_pub = self.create_publisher(Float64MultiArray, '/truck_trailer/state', 10)
+        self.trailer_pose_pub = self.create_publisher(PoseStamped, '/truck_trailer/trailer_pose', 10)
+        self.truck_pose_pub = self.create_publisher(PoseStamped, '/truck_trailer/truck_pose', 10)
+        self.encoder_pub = self.create_publisher(Float32, '/encoder/angle', 10) # Hitch angle
+        self.kelo_angle_pub = self.create_publisher(Float32, '/kelo/angle', 10) # Kelo angle
+        self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
         self.joint_pub = self.create_publisher(JointState, 'joint_states', 10)
         
         # TF broadcaster
         self.tf_broadcaster = TransformBroadcaster(self)
         
-        # Control input subscriber
-        self.cmd_sub = self.create_subscription(
-            Twist,
-            '/cmd_vel',
-            self.cmd_callback,
-            10
-        )
-
-        # Subscriber to set initial pose from Rviz2 2D Pose Estimate
-        self.create_subscription(
-            PoseWithCovarianceStamped,
-            '/initialpose',
-            self.initialpose_callback,
-            10
-        )
+        #Subscribers
+        # NOTE: We treat linear.x as Kelo Speed, angular.z as Kelo Rotation Speed
+        self.cmd_sub = self.create_subscription(Twist, '/cmd_vel', self.cmd_callback, 10)
+        self.create_subscription(PoseWithCovarianceStamped, '/initialpose', self.initialpose_callback, 10)
         
         # Simulation timer (20 Hz)
-        self.dt = 0.1
+        self.dt = 0.05
         self.timer = self.create_timer(self.dt, self.simulation_step)
         self.last_time = self.get_clock().now()
     
         
     def cmd_callback(self, msg):
-        """Receive control commands"""
-        # Linear velocity (m/s)
-        self.V0 = max(-0.5, min(0.5, msg.linear.x))
-        
-        # # Steering angle (rad)
-        # # msg.angular.z is steering command in radians
-        # max_steering = 90.0 * np.pi / 180.0  # 90 degrees
-        # self.delta0 = max(-max_steering, min(max_steering, msg.angular.z))
-
-        omega = msg.angular.z
-
-        if abs(self.V0) > 0.01:
-            self.delta0 = math.atan((omega * self.L0) / self.V0)
-        # else:
-        #     self.delta0 = 0.0
+        """
+        Receive control commands for the Kelo Actuator.
+        msg.linear.x  -> Kelo Linear Velocity (vk)
+        msg.angular.z -> Kelo Angular Velocity (wk)
+        """
+        self.vk = max(0.0, msg.linear.x) # Kelo cannot go backwards
+        self.wk = msg.angular.z
 
     def initialpose_callback(self, msg):
         """Set initial pose from Rviz2 2D Pose Estimate"""
@@ -135,6 +90,7 @@ class truckTrailerSimulator(Node):
         
         self.state[2] = yaw      # theta0 (truck orientation)
         self.state[3] = yaw      # theta1 (trailer orientation)
+        self.state[4] = 0.0      # phi (front wheel angle)
         
         self.get_logger().warn(
             f'Initial pose set to x: {self.state[0]:.2f}, y: {self.state[1]:.2f}, theta: {yaw:.2f} rad'
@@ -143,29 +99,29 @@ class truckTrailerSimulator(Node):
     def truck_trailer_dynamics(self, state, u):
         """
         Compute state derivatives using kinematic model.
-        
-        state = [x1, y1, theta0, theta1]
-        u = [V0, delta0]
+
+        state = [x1, y1, theta0, theta1, phi]
+        u = [vk, wk]
         """
-        x1, y1, th0, th1 = state
-        V0, delta0 = u
+        x1, y1, th0, th1, phi = state
+        vk, wk = u
         
-        # Articulation angle
-        beta = th0 - th1
+        beta = th0 - th1 # Hitch angle
+        V0 = vk * cos(phi)  # truck velocity
+        w0 = vk * sin(phi) / self.L0  # truck angular velocity
         
         # Trailer velocity (kinematic relation)
-        V1 = V0 * cos(beta) + self.M0 * (V0 * tan(delta0) / self.L0) * sin(beta)
+        V1 = V0 * cos(beta) + self.M0 * w0 * sin(beta)
         
         # State derivatives
         dx1 = V1 * cos(th1)
         dy1 = V1 * sin(th1)
-        
+        dth0 = w0
         dth1 = (V0 * sin(beta)) / self.L1 - \
-               (self.M0 * (V0 * tan(delta0) / self.L0) * cos(beta)) / self.L1
-        
-        dth0 = V0 * tan(delta0) / self.L0
-        
-        return np.array([dx1, dy1, dth0, dth1])
+               (self.M0 * w0 * cos(beta)) / self.L1
+        dphi = wk
+
+        return np.array([dx1, dy1, dth0, dth1, dphi])
     
     def euler_to_quaternion(self, yaw):
         """Convert yaw angle to quaternion"""
@@ -187,13 +143,14 @@ class truckTrailerSimulator(Node):
             return
         
         # Integrate dynamics (Euler integration)
-        u = np.array([self.V0, self.delta0])
+        u = np.array([self.vk, self.wk])
         state_dot = self.truck_trailer_dynamics(self.state, u)
         self.state = self.state + self.dt * state_dot
         
         # Unwrap angles to [-pi, pi]
         self.state[2] = self.normalize_angle(self.state[2])  # theta0
         self.state[3] = self.normalize_angle(self.state[3])  # theta1
+        self.state[4] = self.normalize_angle(self.state[4])  # phi
         
         # Publish all topics
         self.publish_state(now)
@@ -213,11 +170,11 @@ class truckTrailerSimulator(Node):
 
     def publish_state(self, now):
         """Publish state in same format as hardware interface"""
-        x1, y1, th0, th1 = self.state
+        x1, y1, th0, th1, phi = self.state
         
-        # State vector [x1, y1, theta0, theta1]
+        # State vector [x1, y1, theta0, theta1, phi]
         state_msg = Float64MultiArray()
-        state_msg.data = [float(x1), float(y1), float(th0), float(th1)]
+        state_msg.data = [float(x1), float(y1), float(th0), float(th1), float(phi)]
         self.state_pub.publish(state_msg)
         
         # Encoder angle (hitch angle beta = theta0 - theta1)
@@ -256,27 +213,24 @@ class truckTrailerSimulator(Node):
         odom.pose.pose.position.x = float(x1)
         odom.pose.pose.position.y = float(y1)
         odom.pose.pose.orientation = self.euler_to_quaternion(th1)
-        odom.twist.twist.linear.x = float(self.V0)
-        odom.twist.twist.angular.z = float(self.delta0)
+        odom.twist.twist.linear.x = float(self.vk*cos(phi))
+        odom.twist.twist.angular.z = float(phi)
         self.odom_pub.publish(odom)
 
         """Publish joint states for hitch articulation and front wheel steering"""
-        x1, y1, th0, th1 = self.state
-        
         js = JointState()
         js.header.stamp = now.to_msg()
         js.name = ['hitch_joint', 'front_wheel_joint']
         js.position = [
             float(th0 - th1),    # Hitch articulation angle (beta)
-            float(self.delta0)   # Front wheel steering angle
+            float(phi)           # Front wheel steering angle
         ]
         self.joint_pub.publish(js)
 
 
-    
     def publish_transforms(self, now):
         """Publish all TF transforms"""
-        x1, y1, th0, th1 = self.state
+        x1, y1, th0, th1, phi = self.state
                 
         transforms = []
                 
