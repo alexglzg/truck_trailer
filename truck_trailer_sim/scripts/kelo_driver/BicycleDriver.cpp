@@ -3,22 +3,28 @@
 
 namespace kelo {
 
-PlatformDriver::PlatformDriver(std::string device, std::vector<WheelConfig>* configs, int nWheels)
-    : device(device), wheelConfigs(configs), nWheels(nWheels), stopThread(false) {
+BicycleDriver::BicycleDriver(std::string device, std::vector<kelo::WheelConfig>* configs, int nWheels)
+    : device(device), wheelConfigs(configs), nWheels(nWheels), stopThread(false), ethercatThread(NULL) {
     
+    // CRITICAL: Initialize SOEM context pointers to internal arrays
     ecx_context.port = &ecx_port;
     ecx_context.slavelist = &ecx_slave[0];
     ecx_context.slavecount = &ecx_slavecount;
     ecx_context.maxslave = EC_MAXSLAVE;
-    ecx_context.esibuf = NULL; 
+    ecx_context.grouplist = &ec_group[0];
+    ecx_context.maxgroup = EC_MAXGROUP;
+    ecx_context.esibuf = NULL;
     ecx_context.esimap = NULL;
+    ecx_context.elist = NULL;
+    ecx_context.idxstack = NULL;
+    ecx_context.ecaterror = NULL;
 }
 
-PlatformDriver::~PlatformDriver() {
+BicycleDriver::~BicycleDriver() {
     closeEthercat();
 }
 
-bool PlatformDriver::initEthercat() {
+bool BicycleDriver::initEthercat() {
     if (!ecx_init(&ecx_context, const_cast<char*>(device.c_str()))) {
         return false;
     }
@@ -28,9 +34,10 @@ bool PlatformDriver::initEthercat() {
     }
 
     ecx_config_map_group(&ecx_context, IOmap, 0);
+    
+    // Check if slaves are reachable
     ecx_statecheck(&ecx_context, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE);
 
-    // Request Operational State
     ecx_slave[0].state = EC_STATE_OPERATIONAL;
     ecx_writestate(&ecx_context, 0);
     ecx_statecheck(&ecx_context, 0, EC_STATE_OPERATIONAL, EC_TIMEOUTSTATE);
@@ -39,12 +46,11 @@ bool PlatformDriver::initEthercat() {
         return false;
     }
 
-    // Start the 1ms I/O thread
-    ethercatThread = new boost::thread(boost::bind(&PlatformDriver::ethercatHandler, this));
+    ethercatThread = new boost::thread(boost::bind(&BicycleDriver::ethercatHandler, this));
     return true;
 }
 
-void PlatformDriver::ethercatHandler() {
+void BicycleDriver::ethercatHandler() {
     while (!stopThread) {
         ecx_receive_processdata(&ecx_context, 1000);
         ecx_send_processdata(&ecx_context);
@@ -52,21 +58,25 @@ void PlatformDriver::ethercatHandler() {
     }
 }
 
-txpdo1_t* PlatformDriver::getRawSensorData(int wheel_index) {
-    int slave = (*wheelConfigs)[wheel_index].ethercatNumber;
+txpdo1_t* BicycleDriver::getRawSensorData(int wheel_idx) {
+    if (wheel_idx >= nWheels) return NULL;
+    int slave = (*wheelConfigs)[wheel_idx].ethercatNumber;
     return (txpdo1_t*) ecx_slave[slave].inputs;
 }
 
-void PlatformDriver::sendRawCommand(int wheel_index, rxpdo1_t* command) {
-    int slave = (*wheelConfigs)[wheel_index].ethercatNumber;
+void BicycleDriver::sendRawCommand(int wheel_idx, rxpdo1_t* command) {
+    if (wheel_idx >= nWheels) return;
+    int slave = (*wheelConfigs)[wheel_idx].ethercatNumber;
     rxpdo1_t* ecData = (rxpdo1_t*) ecx_slave[slave].outputs;
     *ecData = *command;
 }
 
-void PlatformDriver::closeEthercat() {
+void BicycleDriver::closeEthercat() {
     stopThread = true;
     if (ethercatThread) {
         ethercatThread->join();
+        delete ethercatThread;
+        ethercatThread = NULL;
     }
     ecx_slave[0].state = EC_STATE_INIT;
     ecx_writestate(&ecx_context, 0);
