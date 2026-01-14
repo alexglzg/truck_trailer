@@ -22,7 +22,7 @@ public:
     bool initEthercat();
     void closeEthercat();
 
-    // The Bridge: ROS node sets these, the Thread sends them.
+    // ROS node writes to these
     volatile float target_vL;
     volatile float target_vR;
 
@@ -38,8 +38,6 @@ private:
     volatile bool stopThread;
     boost::thread* ethercatThread;
 
-    ecx_contextt ecx_context;
-    ecx_portt ecx_port;
     ec_slavet ecx_slave[EC_MAXSLAVE];
     int ecx_slavecount;
     ec_groupt ec_group[EC_MAXGROUP];
@@ -54,7 +52,8 @@ private:
     ec_eepromFMMUt ec_FMMU;
     boolean EcatError;
     int64 ec_DCtime;               
-    ecx_portt ecx_port_struct; // Renamed to avoid collision
+    ecx_portt ecx_port;
+    ecx_contextt ecx_context;
     char IOmap[4096];
 };
 
