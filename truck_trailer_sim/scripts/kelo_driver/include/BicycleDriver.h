@@ -3,23 +3,13 @@
 
 #include <string>
 #include <vector>
-#include <fstream>
 #include <boost/thread.hpp>
 
 extern "C" {
-#include "kelo_tulip/soem/ethercattype.h"
+#include "kelo_tulip/soem/ethercat.h"
 #include "kelo_tulip/EtherCATModule.h"
 #include "kelo_tulip/KeloDriveAPI.h"
-#include "nicdrv.h"
-#include "kelo_tulip/soem/ethercatbase.h"
-#include "kelo_tulip/soem/ethercatmain.h"
-#include "kelo_tulip/soem/ethercatconfig.h"
-#include "kelo_tulip/soem/ethercatcoe.h"
-#include "kelo_tulip/soem/ethercatdc.h"
-#include "kelo_tulip/soem/ethercatprint.h"
 }
-
-#include "kelo_tulip/Utils.h"
 #include "kelo_tulip/WheelConfig.h"
 
 namespace kelo {
@@ -32,8 +22,11 @@ public:
     bool initEthercat();
     void closeEthercat();
 
+    // The Bridge: ROS node sets these, the Thread sends them.
+    volatile float target_vL;
+    volatile float target_vR;
+
     txpdo1_t* getRawSensorData(int wheel_idx);
-    void sendRawCommand(int wheel_idx, rxpdo1_t* command);
 
 private:
     void ethercatHandler(); 
@@ -45,6 +38,8 @@ private:
     volatile bool stopThread;
     boost::thread* ethercatThread;
 
+    ecx_contextt ecx_context;
+    ecx_portt ecx_port;
     ec_slavet ecx_slave[EC_MAXSLAVE];
     int ecx_slavecount;
     ec_groupt ec_group[EC_MAXGROUP];
@@ -59,11 +54,9 @@ private:
     ec_eepromFMMUt ec_FMMU;
     boolean EcatError;
     int64 ec_DCtime;               
-    ecx_portt ecx_port;
-    ecx_redportt ecx_redport;
-    ecx_contextt ecx_context;
+    ecx_portt ecx_port_struct; // Renamed to avoid collision
     char IOmap[4096];
 };
 
-} // namespace kelo
+} 
 #endif
