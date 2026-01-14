@@ -7,14 +7,12 @@ kelo::BicycleDriver* driver;
 std::vector<kelo::WheelConfig> configs;
 ros::Publisher anglePub;
 
-// Kelo Physical Parameters
+// Kelo Hub Constants
 const double d_w = 0.0775; 
 const double r_w = 0.0524;
 
 void velCallback(const geometry_msgs::Twist::ConstPtr& msg) {
-    // UNICYCLE -> HUB DIFFERENTIAL MAPPING
-    // vL = (v + (w * d/2)) / r
-    // vR = (v - (w * d/2)) / r
+    // target_vk and target_wk mapping
     double v = msg->linear.x;
     double w = msg->angular.z;
 
@@ -24,11 +22,9 @@ void velCallback(const geometry_msgs::Twist::ConstPtr& msg) {
 
 void timerCallback(const ros::TimerEvent&) {
     if (configs.empty()) return;
-
     txpdo1_t* feedback = driver->getRawSensorData(0);
     if (!feedback) return;
 
-    // PUBLISH CURRENT PIVOT ANGLE
     double phi = feedback->encoder_pivot - configs[0].a;
     std_msgs::Float64 m;
     m.data = atan2(sin(phi), cos(phi));
@@ -51,19 +47,15 @@ int main(int argc, char** argv) {
     driver = new kelo::BicycleDriver(dev, &configs, n);
 
     if (!driver->initEthercat()) {
-        ROS_ERROR("Kelo Initialization Failed. Check Power and EtherCAT cables.");
+        ROS_ERROR("Hardware handshake failed. Check Slave IDs and Power.");
         return -1;
     }
 
-    // Safety Delay for Sync
-    ros::Duration(1.0).sleep();
-
-    anglePub = nh.advertise<std_msgs::Float64>("kelo_angle", 10);
-    ros::Subscriber sub = nh.subscribe("/cmd_vel", 10, velCallback);
+    anglePub = nh.advertise<std_msgs::Float64>("/kelo_angle", 10);
+    ros::Subscriber s = nh.subscribe("/cmd_vel", 10, velCallback);
     ros::Timer t = nh.createTimer(ros::Duration(0.02), timerCallback);
 
-    ROS_INFO("Kelo Bicycle Driver Operational.");
-
+    ROS_INFO("Bicycle Driver Operational. Hub should be stiffly locked.");
     ros::spin();
     return 0;
 }
