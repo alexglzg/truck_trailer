@@ -6,18 +6,28 @@ namespace kelo {
 BicycleDriver::BicycleDriver(std::string device, std::vector<kelo::WheelConfig>* configs, int nWheels)
     : device(device), wheelConfigs(configs), nWheels(nWheels), stopThread(false), ethercatThread(NULL) {
     
-    // CRITICAL: Initialize SOEM context pointers to internal arrays
+    // --- CRITICAL: POINTER INITIALIZATION (Matches Original PlatformDriver) ---
     ecx_context.port = &ecx_port;
     ecx_context.slavelist = &ecx_slave[0];
     ecx_context.slavecount = &ecx_slavecount;
     ecx_context.maxslave = EC_MAXSLAVE;
     ecx_context.grouplist = &ec_group[0];
     ecx_context.maxgroup = EC_MAXGROUP;
-    ecx_context.esibuf = NULL;
-    ecx_context.esimap = NULL;
-    ecx_context.elist = NULL;
-    ecx_context.idxstack = NULL;
-    ecx_context.ecaterror = NULL;
+    ecx_context.esibuf = &esibuf[0];
+    ecx_context.esimap = &esimap[0];
+    ecx_context.esislave = 0;
+    ecx_context.elist = &ec_elist;
+    ecx_context.idxstack = &ec_idxstack;
+    ecx_context.ecaterror = &EcatError;
+    ecx_context.DCtO = 0;
+    ecx_context.DCl = 0;
+    ecx_context.DCtime = &ec_DCtime;
+    ecx_context.SMcommtype = &ec_SMcommtype;
+    ecx_context.PDOassign = &ec_PDOassign;
+    ecx_context.PDOdesc = &ec_PDOdesc;
+    ecx_context.eepSM = &ec_SM;
+    ecx_context.eepFMMU = &ec_FMMU;
+    EcatError = FALSE;
 }
 
 BicycleDriver::~BicycleDriver() {
@@ -34,17 +44,16 @@ bool BicycleDriver::initEthercat() {
     }
 
     ecx_config_map_group(&ecx_context, IOmap, 0);
-    
-    // Check if slaves are reachable
     ecx_statecheck(&ecx_context, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE);
 
+    // Force Operational State
     ecx_slave[0].state = EC_STATE_OPERATIONAL;
+    ecx_send_processdata(&ecx_context);
+    ecx_receive_processdata(&ecx_context, EC_TIMEOUTRET);
     ecx_writestate(&ecx_context, 0);
     ecx_statecheck(&ecx_context, 0, EC_STATE_OPERATIONAL, EC_TIMEOUTSTATE);
 
-    if (ecx_slave[0].state != EC_STATE_OPERATIONAL) {
-        return false;
-    }
+    if (ecx_slave[0].state != EC_STATE_OPERATIONAL) return false;
 
     ethercatThread = new boost::thread(boost::bind(&BicycleDriver::ethercatHandler, this));
     return true;
@@ -59,13 +68,11 @@ void BicycleDriver::ethercatHandler() {
 }
 
 txpdo1_t* BicycleDriver::getRawSensorData(int wheel_idx) {
-    if (wheel_idx >= nWheels) return NULL;
     int slave = (*wheelConfigs)[wheel_idx].ethercatNumber;
     return (txpdo1_t*) ecx_slave[slave].inputs;
 }
 
 void BicycleDriver::sendRawCommand(int wheel_idx, rxpdo1_t* command) {
-    if (wheel_idx >= nWheels) return;
     int slave = (*wheelConfigs)[wheel_idx].ethercatNumber;
     rxpdo1_t* ecData = (rxpdo1_t*) ecx_slave[slave].outputs;
     *ecData = *command;
