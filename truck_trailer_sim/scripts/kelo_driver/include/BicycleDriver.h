@@ -3,13 +3,23 @@
 
 #include <string>
 #include <vector>
+#include <fstream>
 #include <boost/thread.hpp>
 
 extern "C" {
 #include "kelo_tulip/soem/ethercat.h"
 #include "kelo_tulip/EtherCATModule.h"
 #include "kelo_tulip/KeloDriveAPI.h"
+#include "nicdrv.h"
+#include "kelo_tulip/soem/ethercatbase.h"
+#include "kelo_tulip/soem/ethercatmain.h"
+#include "kelo_tulip/soem/ethercatconfig.h"
+#include "kelo_tulip/soem/ethercatcoe.h"
+#include "kelo_tulip/soem/ethercatdc.h"
+#include "kelo_tulip/soem/ethercatprint.h"
 }
+
+#include "kelo_tulip/Utils.h"
 #include "kelo_tulip/WheelConfig.h"
 
 namespace kelo {
@@ -22,7 +32,7 @@ public:
     bool initEthercat();
     void closeEthercat();
 
-    // ROS node writes to these
+    // Shared targets for the high-speed thread
     volatile float target_vL;
     volatile float target_vR;
 
@@ -30,6 +40,7 @@ public:
 
 private:
     void ethercatHandler(); 
+    void configureSlave(int slave_idx); // Crucial for "Stiff" torque
 
     std::string device;
     std::vector<kelo::WheelConfig>* wheelConfigs;
@@ -38,6 +49,7 @@ private:
     volatile bool stopThread;
     boost::thread* ethercatThread;
 
+    // --- FULL SOEM CONTEXT ---
     ec_slavet ecx_slave[EC_MAXSLAVE];
     int ecx_slavecount;
     ec_groupt ec_group[EC_MAXGROUP];

@@ -7,31 +7,29 @@ kelo::BicycleDriver* driver;
 std::vector<kelo::WheelConfig> configs;
 ros::Publisher anglePub;
 
-// Kelo Hub Hardware Specs
+// Kelo Physical Parameters
 const double d_w = 0.0775; 
 const double r_w = 0.0524;
 
 void velCallback(const geometry_msgs::Twist::ConstPtr& msg) {
-    // Kinematic mapping: Unicycle -> Differential Actuators
+    // UNICYCLE -> HUB DIFFERENTIAL MAPPING
+    // vL = (v + (w * d/2)) / r
+    // vR = (v - (w * d/2)) / r
     double v = msg->linear.x;
     double w = msg->angular.z;
 
-    double vL = (v + (w * d_w / 2.0)) / r_w;
-    double vR = (v - (w * d_w / 2.0)) / r_w;
-
-    // Direct update to the high-speed thread variables
-    driver->target_vL = (float)vL;
-    driver->target_vR = (float)vR;
+    driver->target_vL = (float)((v + (w * d_w / 2.0)) / r_w);
+    driver->target_vR = (float)((v - (w * d_w / 2.0)) / r_w);
 }
 
 void timerCallback(const ros::TimerEvent&) {
     if (configs.empty()) return;
 
-    txpdo1_t* sensors = driver->getRawSensorData(0);
-    if (!sensors) return;
+    txpdo1_t* feedback = driver->getRawSensorData(0);
+    if (!feedback) return;
 
-    // Publish pivot angle (phi) for MPC
-    double phi = sensors->encoder_pivot - configs[0].a;
+    // PUBLISH CURRENT PIVOT ANGLE
+    double phi = feedback->encoder_pivot - configs[0].a;
     std_msgs::Float64 m;
     m.data = atan2(sin(phi), cos(phi));
     anglePub.publish(m);
@@ -41,9 +39,7 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "bicycle_driver_node");
     ros::NodeHandle nh("~");
 
-    int n; 
-    if(!nh.getParam("num_wheels", n)) n = 1;
-    
+    int n; nh.param<int>("num_wheels", n, 1);
     configs.resize(n);
     for (int i=0; i<n; i++) {
         std::string p = "wheel" + std::to_string(i);
@@ -55,15 +51,18 @@ int main(int argc, char** argv) {
     driver = new kelo::BicycleDriver(dev, &configs, n);
 
     if (!driver->initEthercat()) {
-        ROS_ERROR("Hardware error: Could not initialize EtherCAT bus.");
+        ROS_ERROR("Kelo Initialization Failed. Check Power and EtherCAT cables.");
         return -1;
     }
 
-    anglePub = nh.advertise<std_msgs::Float64>("/kelo_angle", 10);
+    // Safety Delay for Sync
+    ros::Duration(1.0).sleep();
+
+    anglePub = nh.advertise<std_msgs::Float64>("kelo_angle", 10);
     ros::Subscriber sub = nh.subscribe("/cmd_vel", 10, velCallback);
     ros::Timer t = nh.createTimer(ros::Duration(0.02), timerCallback);
 
-    ROS_INFO("Bypass Driver Active. Motors should be locked.");
+    ROS_INFO("Kelo Bicycle Driver Operational.");
 
     ros::spin();
     return 0;
