@@ -1,10 +1,5 @@
-#ifndef BICYCLE_DRIVER_H
-#define BICYCLE_DRIVER_H
-
-#include <string>
-#include <vector>
-#include <fstream>
-#include <boost/thread.hpp>
+#ifndef BICYCLE_DRIVER_H_
+#define BICYCLE_DRIVER_H_
 
 extern "C" {
 #include "kelo_tulip/soem/ethercattype.h"
@@ -18,37 +13,52 @@ extern "C" {
 #include "kelo_tulip/soem/ethercatdc.h"
 #include "kelo_tulip/soem/ethercatprint.h"
 }
-
 #include "kelo_tulip/Utils.h"
 #include "kelo_tulip/WheelConfig.h"
+#include <boost/thread.hpp>
+#include <string>
+#include <vector>
 
 namespace kelo {
 
+struct WheelData {
+    bool enable;
+    bool error;
+    bool errorTimestamp;
+};
+
+enum DriverState {
+    DRIVER_STATE_UNDEFINED = 0x00,
+    DRIVER_STATE_ACTIVE = 0x01,
+    DRIVER_STATE_READY = 0x02,
+    DRIVER_STATE_INIT = 0x04,
+    DRIVER_STATE_ERROR = 0x10,
+    DRIVER_STATE_TIMEOUT = 0x20
+};
+
 class BicycleDriver {
 public:
-    BicycleDriver(std::string device, std::vector<kelo::WheelConfig>* configs, int nWheels);
+    BicycleDriver(std::string device, std::vector<WheelConfig>* wheelConfigs, 
+                  std::vector<WheelData>* wheelData, int nWheels);
     virtual ~BicycleDriver();
 
     bool initEthercat();
     void closeEthercat();
+    void setCanChangeActive();
 
     volatile float target_vL;
     volatile float target_vR;
 
-    txpdo1_t* getRawSensorData(int wheel_idx);
+    txpdo1_t* getProcessData(int slave);
 
-private:
-    void ethercatHandler(); 
-    bool setupSDOs(int slave_idx);
+protected:
+    void ethercatHandler();
+    void doControl();
+    void doStop();
 
-    std::string device;
-    std::vector<kelo::WheelConfig>* wheelConfigs;
-    int nWheels;
-    
-    volatile bool stopThread;
-    boost::thread* ethercatThread;
+    volatile DriverState state;
+    bool canChangeActive;
 
-    // --- FULL SOEM CONTEXT STACK ---
     ec_slavet ecx_slave[EC_MAXSLAVE];
     int ecx_slavecount;
     ec_groupt ec_group[EC_MAXGROUP];
@@ -64,9 +74,23 @@ private:
     boolean EcatError;
     int64 ec_DCtime;               
     ecx_portt ecx_port;
+    ecx_redportt ecx_redport;
     ecx_contextt ecx_context;
+    
     char IOmap[4096];
+    std::string device;
+    bool ethercatInitialized;
+    boost::thread* ethercatThread;
+    volatile bool stopThread;
+
+    int nWheels;
+    std::vector<WheelConfig>* wheelConfigs;
+    std::vector<WheelData>* wheelData;
+
+private:
+    BicycleDriver(const BicycleDriver&);
 };
 
-} 
+} // namespace kelo
+
 #endif
