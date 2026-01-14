@@ -7,7 +7,6 @@ BicycleDriver::BicycleDriver(std::string device, std::vector<kelo::WheelConfig>*
     : device(device), wheelConfigs(configs), nWheels(nWheels), stopThread(false), 
       target_vL(0.0f), target_vR(0.0f), ethercatThread(NULL) {
     
-    // FULL INITIALIZATION of context pointers to avoid Segfaults
     ecx_context.port = &ecx_port;
     ecx_context.slavelist = &ecx_slave[0];
     ecx_context.slavecount = &ecx_slavecount;
@@ -29,29 +28,46 @@ BicycleDriver::BicycleDriver(std::string device, std::vector<kelo::WheelConfig>*
     EcatError = FALSE;
 }
 
+bool BicycleDriver::setupSDOs(int slave) {
+    int retval = 0;
+    int8_t mode = 3; // Profile Velocity Mode
+    float max_curr = 25.0f;
+    
+    // Write Mode of Operation
+    retval += ecx_SDOwrite(&ecx_context, slave, 0x6060, 0x00, FALSE, sizeof(mode), &mode, EC_TIMEOUTRXM);
+    // Write Max Current (Torque Limit)
+    retval += ecx_SDOwrite(&ecx_context, slave, 0x6073, 0x00, FALSE, sizeof(max_curr), &max_curr, EC_TIMEOUTRXM);
+    
+    return (retval > 0);
+}
+
 bool BicycleDriver::initEthercat() {
     if (!ecx_init(&ecx_context, const_cast<char*>(device.c_str()))) return false;
     if (ecx_config_init(&ecx_context, TRUE) <= 0) return false;
 
     for (int i = 1; i <= ecx_slavecount; i++) {
-        // Clear Error Bit (Fixes State 18)
+        // Clear errors and force INIT
         ecx_slave[i].state = EC_STATE_INIT | EC_STATE_ACK;
         ecx_writestate(&ecx_context, i);
 
-        // Explicit Kelo Memory Addresses
+        // Configure Mailboxes (Sync Managers)
         ecx_slave[i].SM[2].StartAddr = 0x1600;
         ecx_slave[i].SM[2].SMflags = 0x00010024;
         ecx_slave[i].SM[3].StartAddr = 0x1a00;
         ecx_slave[i].SM[3].SMflags = 0x00010020;
+
+        // Apply SDO configuration while in PRE-OP
+        setupSDOs(i);
     }
 
     ecx_config_map_group(&ecx_context, IOmap, 0);
     ecx_configdc(&ecx_context);
 
-    // CYCLIC TRANSITION TO SAFE_OP (Must send data while requesting state)
+    // Transition Loop: PRE-OP -> SAFE-OP -> OPERATIONAL
     ecx_slave[0].state = EC_STATE_SAFE_OP;
     ecx_writestate(&ecx_context, 0);
-    int chk = 100;
+    
+    int chk = 200;
     do {
         ecx_send_processdata(&ecx_context);
         ecx_receive_processdata(&ecx_context, EC_TIMEOUTRET);
@@ -60,10 +76,9 @@ bool BicycleDriver::initEthercat() {
 
     if (ecx_slave[0].state != EC_STATE_SAFE_OP) return false;
 
-    // CYCLIC TRANSITION TO OPERATIONAL
     ecx_slave[0].state = EC_STATE_OPERATIONAL;
     ecx_writestate(&ecx_context, 0);
-    chk = 100;
+    chk = 200;
     do {
         ecx_send_processdata(&ecx_context);
         ecx_receive_processdata(&ecx_context, EC_TIMEOUTRET);
@@ -81,15 +96,18 @@ void BicycleDriver::ethercatHandler() {
         ecx_receive_processdata(&ecx_context, 1000);
         for (int i = 0; i < nWheels; i++) {
             int slave = (*wheelConfigs)[i].ethercatNumber;
-            txpdo1_t* rx = (txpdo1_t*) ecx_slave[slave].inputs;
-            rxpdo1_t* tx = (rxpdo1_t*) ecx_slave[slave].outputs;
+            txpdo1_t* tx = (txpdo1_t*) ecx_slave[slave].inputs;
+            rxpdo1_t* rx = (rxpdo1_t*) ecx_slave[slave].outputs;
 
-            tx->timestamp = rx->sensor_ts + 100000; 
-            tx->command1 = 7; 
-            tx->limit1_p = 25.0f; tx->limit1_n = -25.0f;
-            tx->limit2_p = 25.0f; tx->limit2_n = -25.0f;
-            tx->setpoint1 = target_vL;
-            tx->setpoint2 = -target_vR; 
+            // Handshake synchronization (Watchdog)
+            rx->timestamp = tx->sensor_ts + 100000; 
+            rx->command1 = 7; // Enable Motor 1 & 2 + Velocity Mode
+            rx->command2 = 0;
+            rx->limit1_p = 25.0f; rx->limit1_n = -25.0f;
+            rx->limit2_p = 25.0f; rx->limit2_n = -25.0f;
+
+            rx->setpoint1 = target_vL;
+            rx->setpoint2 = -target_vR; // Mechanical Mirroring Inversion
         }
         ecx_send_processdata(&ecx_context);
         boost::this_thread::sleep(boost::posix_time::microseconds(1000));
@@ -97,6 +115,7 @@ void BicycleDriver::ethercatHandler() {
 }
 
 txpdo1_t* BicycleDriver::getRawSensorData(int wheel_idx) {
+    if (wheel_idx >= nWheels) return NULL;
     int slave = (*wheelConfigs)[wheel_idx].ethercatNumber;
     return (txpdo1_t*) ecx_slave[slave].inputs;
 }
@@ -104,6 +123,8 @@ txpdo1_t* BicycleDriver::getRawSensorData(int wheel_idx) {
 void BicycleDriver::closeEthercat() {
     stopThread = true;
     if (ethercatThread) ethercatThread->join();
+    ecx_slave[0].state = EC_STATE_INIT;
+    ecx_writestate(&ecx_context, 0);
     ecx_close(&ecx_context);
 }
 

@@ -39,6 +39,7 @@ public:
 
 private:
     void ethercatHandler(); 
+    bool setupSDOs(int slave_idx);
 
     std::string device;
     std::vector<kelo::WheelConfig>* wheelConfigs;
@@ -47,7 +48,7 @@ private:
     volatile bool stopThread;
     boost::thread* ethercatThread;
 
-    // FULL SOEM CONTEXT (Exactly like original)
+    // --- FULL SOEM CONTEXT STACK ---
     ec_slavet ecx_slave[EC_MAXSLAVE];
     int ecx_slavecount;
     ec_groupt ec_group[EC_MAXGROUP];
