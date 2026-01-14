@@ -32,7 +32,6 @@ public:
     bool initEthercat();
     void closeEthercat();
 
-    // The Raw Actuator Interface
     txpdo1_t* getRawSensorData(int wheel_idx);
     void sendRawCommand(int wheel_idx, rxpdo1_t* command);
 
@@ -46,7 +45,6 @@ private:
     volatile bool stopThread;
     boost::thread* ethercatThread;
 
-    // --- FULL SOEM INTERNAL STATE (Prevents Segfaults) ---
     ec_slavet ecx_slave[EC_MAXSLAVE];
     int ecx_slavecount;
     ec_groupt ec_group[EC_MAXGROUP];

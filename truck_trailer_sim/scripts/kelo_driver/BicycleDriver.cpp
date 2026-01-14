@@ -6,7 +6,6 @@ namespace kelo {
 BicycleDriver::BicycleDriver(std::string device, std::vector<kelo::WheelConfig>* configs, int nWheels)
     : device(device), wheelConfigs(configs), nWheels(nWheels), stopThread(false), ethercatThread(NULL) {
     
-    // --- CRITICAL: POINTER INITIALIZATION (Matches Original PlatformDriver) ---
     ecx_context.port = &ecx_port;
     ecx_context.slavelist = &ecx_slave[0];
     ecx_context.slavecount = &ecx_slavecount;
@@ -35,21 +34,13 @@ BicycleDriver::~BicycleDriver() {
 }
 
 bool BicycleDriver::initEthercat() {
-    if (!ecx_init(&ecx_context, const_cast<char*>(device.c_str()))) {
-        return false;
-    }
-
-    if (ecx_config_init(&ecx_context, TRUE) <= 0) {
-        return false;
-    }
+    if (!ecx_init(&ecx_context, const_cast<char*>(device.c_str()))) return false;
+    if (ecx_config_init(&ecx_context, TRUE) <= 0) return false;
 
     ecx_config_map_group(&ecx_context, IOmap, 0);
     ecx_statecheck(&ecx_context, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE);
 
-    // Force Operational State
     ecx_slave[0].state = EC_STATE_OPERATIONAL;
-    ecx_send_processdata(&ecx_context);
-    ecx_receive_processdata(&ecx_context, EC_TIMEOUTRET);
     ecx_writestate(&ecx_context, 0);
     ecx_statecheck(&ecx_context, 0, EC_STATE_OPERATIONAL, EC_TIMEOUTSTATE);
 

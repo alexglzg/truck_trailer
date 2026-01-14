@@ -2,20 +2,15 @@
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
 #include <sensor_msgs/Joy.h>
-#include <sensor_msgs/Imu.h>
 #include <std_msgs/Float64.h>
-#include <std_msgs/Float32.h>
-#include <std_msgs/Int32.h>
 
 kelo::BicycleDriver* driver;
 std::vector<kelo::WheelConfig> configs;
-
-ros::Publisher anglePub, imuPub, battPub, statusPub;
-
+ros::Publisher anglePub;
 double vk = 0.0, wk = 0.0;
 bool useJoy = false;
 
-// Kelo Hub Dimensions
+// Kelo Dimensions
 const double d_w = 0.0775; 
 const double r_w = 0.0524;
 
@@ -24,7 +19,7 @@ void velCallback(const geometry_msgs::Twist::ConstPtr& msg) {
 }
 
 void joyCallback(const sensor_msgs::Joy::ConstPtr& joy) {
-    if (joy->buttons[5]) { // RB/R1 Deadman
+    if (joy->buttons[5]) { // R1/RB Deadman switch
         useJoy = true;
         vk = joy->axes[1] * 1.0; 
         wk = joy->axes[0] * 1.5;
@@ -40,38 +35,34 @@ void updateHardware(const ros::TimerEvent&) {
     txpdo1_t* feedback = driver->getRawSensorData(0);
     if (!feedback) return;
 
-    // 1. ACTUATOR MATH (Bicycle/Unicycle Bypass)
+    // --- CRITICAL: THE HARDWARE ARMING SEQUENCE ---
+    // 1. Sync timestamp to hardware sensor clock + offset
+    // This stops the hardware safety watchdog from tripping.
+    uint64_t next_ts = feedback->sensor_ts + 1000;
+
+    // 2. Map Unicycle to Differential
     double vL = (vk + (wk * d_w / 2.0)) / r_w;
     double vR = (vk - (wk * d_w / 2.0)) / r_w;
 
-    // 2. CONSTRUCT RAW PACKET
-    rxpdo1_t cmd;
-    cmd.timestamp = feedback->sensor_ts; // Absolute Sync
-    cmd.command1 = 7;                   // Enable + Velocity Mode
-    cmd.limit1_p = 20.0; cmd.limit1_n = -20.0;
-    cmd.limit2_p = 20.0; cmd.limit2_n = -20.0;
-    cmd.setpoint1 = (float)vL;
-    cmd.setpoint2 = (float)-vR;
+    // 3. Construct the 'Locking' Command
+    rxpdo1_t command;
+    command.timestamp = next_ts;
+    
+    // command1 = 7 (Bit 0: Enable M1, Bit 1: Enable M2, Bit 2: Velocity Mode)
+    command.command1 = 7; 
+    
+    command.limit1_p = 20.0; command.limit1_n = -20.0;
+    command.limit2_p = 20.0; command.limit2_n = -20.0;
+    command.setpoint1 = (float)vL;
+    command.setpoint2 = (float)-vR;
 
-    driver->sendRawCommand(0, &cmd);
+    // 4. Send directly to EtherCAT output buffer
+    driver->sendRawCommand(0, &command);
 
-    // 3. PUBLISHERS
-    // Angle phi
-    std_msgs::Float64 m; 
+    // 5. Feedback
     double phi = feedback->encoder_pivot - configs[0].a;
-    m.data = atan2(sin(phi), cos(phi));
+    std_msgs::Float64 m; m.data = atan2(sin(phi), cos(phi));
     anglePub.publish(m);
-
-    // IMU
-    sensor_msgs::Imu imu;
-    imu.header.stamp = ros::Time::now();
-    imu.angular_velocity.z = feedback->gyro_z;
-    imu.linear_acceleration.x = feedback->accel_x;
-    imuPub.publish(imu);
-
-    // Battery
-    std_msgs::Float32 b; b.data = feedback->voltage_bus;
-    battPub.publish(b);
 }
 
 int main(int argc, char** argv) {
@@ -90,14 +81,11 @@ int main(int argc, char** argv) {
     driver = new kelo::BicycleDriver(dev, &configs, n);
 
     if (!driver->initEthercat()) {
-        ROS_ERROR("Failed to start EtherCAT Master.");
+        ROS_ERROR("EtherCAT Init Failed. Slaves might not be Operational.");
         return -1;
     }
 
-    anglePub = nh.advertise<std_msgs::Float64>("/kelo_angle", 10);
-    imuPub = nh.advertise<sensor_msgs::Imu>("imu", 10);
-    battPub = nh.advertise<std_msgs::Float32>("battery", 10);
-    
+    anglePub = nh.advertise<std_msgs::Float64>("kelo_angle", 10);
     ros::Subscriber s1 = nh.subscribe("/cmd_vel", 10, velCallback);
     ros::Subscriber s2 = nh.subscribe("/joy", 10, joyCallback);
     ros::Timer t = nh.createTimer(ros::Duration(0.02), updateHardware);
