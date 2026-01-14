@@ -22,7 +22,7 @@ public:
     bool initEthercat();
     void closeEthercat();
 
-    // Direct Actuator Targets
+    // Targets for the cyclic thread
     volatile float target_vL;
     volatile float target_vR;
 
@@ -38,7 +38,7 @@ private:
     volatile bool stopThread;
     boost::thread* ethercatThread;
 
-    // --- FULL SOEM STACK ---
+    // --- FULL SOEM STACK INITIALIZATION ---
     ecx_contextt ecx_context;
     ecx_portt ecx_port;
     ec_slavet ecx_slave[EC_MAXSLAVE];

@@ -7,25 +7,23 @@ kelo::BicycleDriver* driver;
 std::vector<kelo::WheelConfig> configs;
 ros::Publisher anglePub;
 
-// Kelo Hub Constants
+// Hub Parameters
 const double d_w = 0.0775; 
 const double r_w = 0.0524;
 
 void velCallback(const geometry_msgs::Twist::ConstPtr& msg) {
-    // target_vk and target_wk mapping
     double v = msg->linear.x;
     double w = msg->angular.z;
-
     driver->target_vL = (float)((v + (w * d_w / 2.0)) / r_w);
     driver->target_vR = (float)((v - (w * d_w / 2.0)) / r_w);
 }
 
 void timerCallback(const ros::TimerEvent&) {
     if (configs.empty()) return;
-    txpdo1_t* feedback = driver->getRawSensorData(0);
-    if (!feedback) return;
+    txpdo1_t* sensors = driver->getRawSensorData(0);
+    if (!sensors) return;
 
-    double phi = feedback->encoder_pivot - configs[0].a;
+    double phi = sensors->encoder_pivot - configs[0].a;
     std_msgs::Float64 m;
     m.data = atan2(sin(phi), cos(phi));
     anglePub.publish(m);
@@ -47,15 +45,15 @@ int main(int argc, char** argv) {
     driver = new kelo::BicycleDriver(dev, &configs, n);
 
     if (!driver->initEthercat()) {
-        ROS_ERROR("Hardware handshake failed. Check Slave IDs and Power.");
+        ROS_ERROR("CRITICAL: EtherCAT initialization sequence failed.");
         return -1;
     }
 
-    anglePub = nh.advertise<std_msgs::Float64>("/kelo_angle", 10);
+    anglePub = nh.advertise<std_msgs::Float64>("kelo_angle", 10);
     ros::Subscriber s = nh.subscribe("/cmd_vel", 10, velCallback);
     ros::Timer t = nh.createTimer(ros::Duration(0.02), timerCallback);
 
-    ROS_INFO("Bicycle Driver Operational. Hub should be stiffly locked.");
+    ROS_INFO("Bicycle Driver Active. Actuators should be electrically locked.");
     ros::spin();
     return 0;
 }
