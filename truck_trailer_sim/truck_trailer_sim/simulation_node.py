@@ -50,7 +50,7 @@ class truckTrailerSimulator(Node):
         self.trailer_pose_pub = self.create_publisher(PoseStamped, '/truck_trailer/trailer_pose', 10)
         self.truck_pose_pub = self.create_publisher(PoseStamped, '/truck_trailer/truck_pose', 10)
         self.encoder_pub = self.create_publisher(Float32, '/encoder/angle', 10) # Hitch angle
-        self.kelo_angle_pub = self.create_publisher(Float32, '/kelo/angle', 10) # Kelo angle
+        self.kelo_angle_pub = self.create_publisher(Float32, '/kelo_angle', 10) # Kelo angle
         self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
         self.joint_pub = self.create_publisher(JointState, 'joint_states', 10)
         
@@ -74,7 +74,8 @@ class truckTrailerSimulator(Node):
         msg.linear.x  -> Kelo Linear Velocity (vk)
         msg.angular.z -> Kelo Angular Velocity (wk)
         """
-        self.vk = max(0.0, msg.linear.x) # Kelo cannot go backwards
+        # self.vk = max(0.0, msg.linear.x) # Kelo cannot go backwards
+        self.vk = msg.linear.x
         self.wk = msg.angular.z
 
     def initialpose_callback(self, msg):

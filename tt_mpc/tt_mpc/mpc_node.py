@@ -27,17 +27,17 @@ class DCBFNode(Node):
         self.TRAILER_FRONT = self.L1 + 0.015
         self.TRAILER_BACK = 0.064
 
-        self.V0_MAX = 0.5
-        self.DELTA0_MAX = 1.0#np.radians(50)
+        self.VK_MAX = 0.5
+        self.WK_MAX = 1.0
         self.BETA_MAX = np.radians(90)
         self.N = 10
         self.dt = 0.2
         self.N_cbf = 9
         self.MAX_OBS = 4
 
-        self.Q = np.diag([10.0, 10.0, 0.0, 0.0])  
-        self.R = np.diag([0.1, 1.0])               
-        self.R_smooth = np.diag([0.1, 0.5])        
+        self.Q = np.diag([1.0, 1.0, 0.0, 0.0, 0.0])  
+        self.R = np.diag([1.0, 0.1])               
+        self.R_smooth = np.diag([0.5, 0.1])        
         self.Q_terminal = self.Q * 10
         self.gamma = 0.9
         self.margin_dist = 0.2
@@ -53,10 +53,10 @@ class DCBFNode(Node):
         self.create_subscription(PoseStamped, '/goal_pose', self.goal_cb, 10)
 
         # --- State ---
-        self.current_state = np.zeros(4) 
+        self.current_state = np.zeros(5) 
         self.state_received = False
         self.u_prev = np.zeros(2)
-        self.x_goal = np.array([2.0, 2.0, 0.0, 0.0])
+        self.x_goal = np.array([2.0, 2.0, 0.0, 0.0, 0.0])
         
         self.warm_start_val = None 
         self.vars_shape = None
@@ -119,8 +119,8 @@ class DCBFNode(Node):
         opti = ca.Opti()
         
         # --- 1. Define Parameters (Symbolic Placeholders) ---
-        p_X0 = opti.parameter(4)
-        p_Ref = opti.parameter(4)
+        p_X0 = opti.parameter(5)
+        p_Ref = opti.parameter(5)
         p_U_prev = opti.parameter(2)
         p_A_obs = opti.parameter(4 * self.MAX_OBS, 2)
         p_b_obs = opti.parameter(4 * self.MAX_OBS)
@@ -138,8 +138,10 @@ class DCBFNode(Node):
         A_tl_dm = A_tr_dm
         
         for k in range(self.N):
-            xk = opti.variable(4); uk = opti.variable(2)
-            X.append(xk); U.append(uk)
+            xk = opti.variable(5)
+            uk = opti.variable(2)
+            X.append(xk)
+            U.append(uk)
             vars_flat.extend([xk, uk])
             
             if k < self.N_cbf:
@@ -152,7 +154,7 @@ class DCBFNode(Node):
                     # Store logic for constraints (same as before)
                     # We retrieve them via index or list if needed, but for 'vars_flat' we just push them
         
-        X.append(opti.variable(4))
+        X.append(opti.variable(5))
         vars_flat.append(X[-1])
         
         # Combine all vars into one vector for Function Interface
@@ -182,7 +184,7 @@ class DCBFNode(Node):
         Lambda_tl_struct, Mu_tl_struct, Omega_tl_struct = [], [], []
         
         for k in range(self.N):
-            xk = opti.variable(4); uk = opti.variable(2)
+            xk = opti.variable(5); uk = opti.variable(2)
             X.append(xk); U.append(uk)
             vars_flat.extend([xk, uk])
             
@@ -202,7 +204,7 @@ class DCBFNode(Node):
                 Lambda_tr_struct.append(l_tr_k); Mu_tr_struct.append(m_tr_k); Omega_tr_struct.append(o_tr_k)
                 Lambda_tl_struct.append(l_tl_k); Mu_tl_struct.append(m_tl_k); Omega_tl_struct.append(o_tl_k)
 
-        X.append(opti.variable(4))
+        X.append(opti.variable(5))
         vars_flat.append(X[-1])
         all_vars = ca.vertcat(*vars_flat)
 
@@ -218,20 +220,28 @@ class DCBFNode(Node):
             cost += ca.mtimes([du.T, self.R_smooth, du])
             
             # Dynamics
-            x1, y1, th1, th0 = xk[0], xk[1], xk[2], xk[3]
-            v0, d0 = uk[0], uk[1]; beta = th0 - th1
-            V1 = v0 * ca.cos(beta) + self.M0 * (v0 * ca.tan(d0)/self.L0) * ca.sin(beta)
+            x1, y1, th1, th0, phi = xk[0], xk[1], xk[2], xk[3], xk[4]
+            vk, wk = uk[0], uk[1]
+            beta = th0 - th1
+            v0 = vk * ca.cos(phi)
+            w0 = vk * ca.sin(phi) / self.L0
+
+            V1 = v0 * ca.cos(beta) + self.M0 * w0 * ca.sin(beta)
+
             x_next_model = ca.vertcat(
-                x1 + V1*ca.cos(th1)*self.dt, y1 + V1*ca.sin(th1)*self.dt,
-                th1 + (v0*ca.sin(beta)/self.L1 - self.M0*(v0*ca.tan(d0)/self.L0)*ca.cos(beta)/self.L1)*self.dt,
-                th0 + v0*ca.tan(d0)/self.L0*self.dt
+                x1 + V1*ca.cos(th1)*self.dt, 
+                y1 + V1*ca.sin(th1)*self.dt,
+                th1 + (v0*ca.sin(beta)/self.L1 - self.M0*w0*ca.cos(beta)/self.L1)*self.dt,
+                th0 + w0 * self.dt,
+                phi + wk * self.dt
             )
             opti.subject_to(x_next == x_next_model)
             if k==0: opti.subject_to(X[0] == p_X0)
             
             # Bounds
-            opti.subject_to(opti.bounded(-self.V0_MAX, uk[0], self.V0_MAX))
-            opti.subject_to(opti.bounded(-self.DELTA0_MAX, uk[1], self.DELTA0_MAX))
+            opti.subject_to(opti.bounded(-self.VK_MAX, uk[0], self.VK_MAX))
+            # opti.subject_to(opti.bounded(0.0, uk[0], self.VK_MAX))
+            opti.subject_to(opti.bounded(-self.WK_MAX, uk[1], self.WK_MAX))
             # opti.subject_to(opti.bounded(-self.BETA_MAX, xk[3]-xk[2], self.BETA_MAX))
             # beta should be wrapped before applying bounds
             # beta_wrapped = ca.atan2(ca.sin(xk[3]-xk[2]), ca.cos(xk[3]-xk[2]))
@@ -290,11 +300,11 @@ class DCBFNode(Node):
     # =====================================================
     def state_cb(self, msg):
         d = msg.data
-        self.current_state = np.array([d[0], d[1], d[3], d[2]])
+        self.current_state = np.array([d[0], d[1], d[3], d[2], d[4]])  # [x1, y1, th1, th0, phi]
         self.state_received = True
 
     def goal_cb(self, msg):
-        self.x_goal = np.array([msg.pose.position.x, msg.pose.position.y, 0.0, 0.0]) # Simple XY goal
+        self.x_goal = np.array([msg.pose.position.x, msg.pose.position.y, 0.0, 0.0, 0.0]) # Simple XY goal
         self.goal_received = True
 
     def obs_cb(self, msg):
@@ -313,7 +323,7 @@ class DCBFNode(Node):
         if not self.state_received: return
 
         # 1. Pre-calc Geometry for Duals
-        x1, y1, th1, th0 = self.current_state
+        x1, y1, th1, th0, phi = self.current_state
         x0, y0 = self.get_tractor_position(x1, y1, th1, th0)
         self.publish_polytopes(x1, y1, th1, th0, x0, y0) # Viz
         
@@ -356,7 +366,7 @@ class DCBFNode(Node):
             self.publish_action(u_opt)
             self.publish_path(traj)
             # log info
-            self.get_logger().info(f"MPC Control: v0={u_opt[0]:.3f}, delta0={np.degrees(u_opt[1]):.2f} deg")
+            self.get_logger().info(f"MPC Control: vk={u_opt[0]:.3f}, wk={u_opt[1]:.2f}")
             
         except Exception as e:
             self.get_logger().error(f"MPC Error: {e}")
@@ -365,9 +375,7 @@ class DCBFNode(Node):
 
     def publish_action(self, action):        
         lin_vel = action[0]
-        steer_angle = action[1]
-
-        ang_vel = lin_vel * tan(steer_angle) / self.L0  # omega = v * tan(delta) / L
+        ang_vel = action[1]
 
         # Create Twist message
         msg = Twist()
@@ -389,7 +397,11 @@ class DCBFNode(Node):
         self.traj_pub.publish(msg)
 
 def main(args=None):
-    rclpy.init(args=args); node = DCBFNode(); rclpy.spin(node); node.destroy_node(); rclpy.shutdown()
+    rclpy.init(args=args)
+    node = DCBFNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

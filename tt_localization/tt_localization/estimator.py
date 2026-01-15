@@ -16,6 +16,7 @@ class TruckTrailerEstimator(Node):
         
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
         self.create_subscription(Float32, '/encoder/angle', self.encoder_callback, 10)
+        self.create_subscription(Float32, '/kelo_angle', self.kelo_callback, 10)
 
         self.state_pub = self.create_publisher(Float64MultiArray, '/truck_trailer/state', 10)
         
@@ -27,6 +28,7 @@ class TruckTrailerEstimator(Node):
         self.trailer_y = 0.0
         self.trailer_yaw = 0.0
         self.hitch_angle = 0.0
+        self.kelo_angle = 0.0
         self.odom_received = False
 
     def quaternion_to_yaw(self, q):
@@ -49,6 +51,9 @@ class TruckTrailerEstimator(Node):
         self.odom_received = True
         self.publish_full_state(msg.header.stamp)
 
+    def kelo_callback(self, msg):
+        self.kelo_angle = msg.data
+
     def publish_full_state(self, stamp):
         if not self.odom_received:
             return
@@ -64,8 +69,8 @@ class TruckTrailerEstimator(Node):
         truck_y = hitch_y + (self.M0 * math.sin(truck_yaw))
 
         state_msg = Float64MultiArray()
-        # [TrailerX, TrailerY, TruckYaw, TrailerYaw]
-        state_msg.data = [self.trailer_x, self.trailer_y, truck_yaw, self.trailer_yaw]
+        # [TrailerX, TrailerY, TruckYaw, TrailerYaw, KeloAngle]
+        state_msg.data = [self.trailer_x, self.trailer_y, truck_yaw, self.trailer_yaw, self.kelo_angle]
         self.state_pub.publish(state_msg)
 
         t_pose = PoseStamped()

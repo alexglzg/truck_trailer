@@ -55,7 +55,8 @@ class truckTrailerPlanner(Node):
         # x1, y1: trailer position
         # theta0: truck orientation
         # theta1: trailer orientation
-        self.state = np.array([0.0, 0.0, 0.0, 0.0])
+        # phi: front wheel steering angle
+        self.state = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
         self.cmd_pub   = self.create_publisher(Twist, '/cmd_vel', 10)
         self.path_pub  = self.create_publisher(Path, '/planned_path', 10)
 
@@ -100,6 +101,7 @@ class truckTrailerPlanner(Node):
         self.get_logger().info(
             f"Received occupancy grid: {msg.info.width} x {msg.info.height}"
         )
+        # self.map_data = self.preprocess_occupancy_grid(msg, device='cuda')
         self.map_data = self.preprocess_occupancy_grid(msg, device='cuda')
 
         if self.goal is not None and not self.planner_initialized:
@@ -116,7 +118,7 @@ class truckTrailerPlanner(Node):
         self.state[1] = msg.data[1]
         self.state[2] = msg.data[2]
         self.state[3] = msg.data[3]
-        
+        self.state[4] = msg.data[4]
         # self.get_logger().warn(
         #     f'received pose is x: {self.state[0]:.2f}, y: {self.state[1]:.2f}, theta: {self.state[3]:.2f} rad'
         # )
@@ -124,9 +126,7 @@ class truckTrailerPlanner(Node):
     def publish_action(self, action):        
         # Convert to float (in case it's a tensor)
         lin_vel = float(action[0])
-        steer_angle = float(action[1])
-
-        ang_vel = lin_vel * math.tan(steer_angle) / Dynamics()._L0  # omega = v * tan(delta) / L
+        ang_vel = float(action[1])
 
         # Create Twist message
         msg = Twist()
@@ -210,7 +210,7 @@ class truckTrailerPlanner(Node):
         # Initialize MPPI planner
         self.planner = MPPIPlanner(
             cfg=self.cfg["mppi"],
-            nx=4,
+            nx=5,
             dynamics=self.dynamics.step,
             running_cost=self.objective.compute_running_cost,
         )
