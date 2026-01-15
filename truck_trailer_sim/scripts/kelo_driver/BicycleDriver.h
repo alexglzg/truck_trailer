@@ -56,6 +56,10 @@ protected:
     void doControl();
     void doStop();
 
+    float ramped_vL;
+    float ramped_vR;
+    const float max_v_step = 0.025f; // Max change in velocity per 1ms frame
+
     volatile DriverState state;
     bool canChangeActive;
 
