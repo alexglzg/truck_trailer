@@ -4,9 +4,9 @@ class Dynamics:
     def __init__(self, dt=0.05, device="cuda:0") -> None:
         self._dt = dt
         self._device = device
-        self._L0 = 0.421   # truck wheelbase
-        self._M0 = -0.045   # hitch offset behind truck rear axle
-        self._L1 =  0.495   # hitch to trailer axle
+        self._L0 = 0.42   # truck wheelbase
+        self._M0 = -0.02   # hitch offset behind truck rear axle
+        self._L1 =  0.537   # hitch to trailer axle
 
     
     def step(self, states: torch.Tensor, actions: torch.Tensor, t: int) -> torch.Tensor:

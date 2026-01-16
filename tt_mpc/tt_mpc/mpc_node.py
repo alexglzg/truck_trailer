@@ -28,7 +28,7 @@ class DCBFNode(Node):
         self.TRAILER_BACK = 0.064
 
         self.V0_MAX = 0.5
-        self.DELTA0_MAX = 1.0#np.radians(50)
+        self.DELTA0_MAX = np.radians(50)#np.radians(180)
         self.BETA_MAX = np.radians(90)
         self.N = 10
         self.dt = 0.2
@@ -36,8 +36,8 @@ class DCBFNode(Node):
         self.MAX_OBS = 4
 
         self.Q = np.diag([10.0, 10.0, 0.0, 0.0])  
-        self.R = np.diag([0.1, 1.0])               
-        self.R_smooth = np.diag([0.1, 0.5])        
+        self.R = np.diag([0.5, 0.0])               
+        self.R_smooth = np.diag([0.1, 0.0])        
         self.Q_terminal = self.Q * 10
         self.gamma = 0.9
         self.margin_dist = 0.2
@@ -234,8 +234,8 @@ class DCBFNode(Node):
             opti.subject_to(opti.bounded(-self.DELTA0_MAX, uk[1], self.DELTA0_MAX))
             # opti.subject_to(opti.bounded(-self.BETA_MAX, xk[3]-xk[2], self.BETA_MAX))
             # beta should be wrapped before applying bounds
-            # beta_wrapped = ca.atan2(ca.sin(xk[3]-xk[2]), ca.cos(xk[3]-xk[2]))
-            # opti.subject_to(opti.bounded(-self.BETA_MAX, beta_wrapped, self.BETA_MAX))
+            beta_wrapped = ca.atan2(ca.sin(xk[3]-xk[2]), ca.cos(xk[3]-xk[2]))
+            opti.subject_to(opti.bounded(-self.BETA_MAX, beta_wrapped, self.BETA_MAX))
 
             # CBF
             if k < self.N_cbf:
@@ -367,7 +367,7 @@ class DCBFNode(Node):
         lin_vel = action[0]
         steer_angle = action[1]
 
-        ang_vel = lin_vel * tan(steer_angle) / self.L0  # omega = v * tan(delta) / L
+        # ang_vel = lin_vel * tan(steer_angle) / self.L0  # omega = v * tan(delta) / L
 
         # Create Twist message
         msg = Twist()
@@ -376,7 +376,7 @@ class DCBFNode(Node):
         msg.linear.z = 0.0
         msg.angular.x = 0.0
         msg.angular.y = 0.0
-        msg.angular.z = ang_vel
+        msg.angular.z = steer_angle
 
         # Publish
         self.cmd_pub.publish(msg)

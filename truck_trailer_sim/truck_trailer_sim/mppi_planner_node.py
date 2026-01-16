@@ -126,7 +126,7 @@ class truckTrailerPlanner(Node):
         lin_vel = float(action[0])
         steer_angle = float(action[1])
 
-        ang_vel = lin_vel * math.tan(steer_angle) / Dynamics()._L0  # omega = v * tan(delta) / L
+        # ang_vel = lin_vel * math.tan(steer_angle) / Dynamics()._L0  # omega = v * tan(delta) / L
 
         # Create Twist message
         msg = Twist()
@@ -135,7 +135,7 @@ class truckTrailerPlanner(Node):
         msg.linear.z = 0.0
         msg.angular.x = 0.0
         msg.angular.y = 0.0
-        msg.angular.z = ang_vel
+        msg.angular.z = steer_angle
 
         # Publish
         self.cmd_pub.publish(msg)
