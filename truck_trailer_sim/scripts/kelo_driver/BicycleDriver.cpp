@@ -1,5 +1,6 @@
 #include "kelo_tulip/BicycleDriver.h"
 #include <iostream>
+#include <algorithm>
 
 namespace kelo {
 
@@ -12,6 +13,10 @@ BicycleDriver::BicycleDriver(std::string device, std::vector<WheelConfig>* confi
     ethercatInitialized = false;
     stopThread = false;
     target_vL = 0.0f; target_vR = 0.0f;
+
+    // Initialize ramped values to zero
+    ramped_vL = 0.0f;
+    ramped_vR = 0.0f;
 
     ecx_context.port = &ecx_port;
     ecx_context.slavelist = &ecx_slave[0];
@@ -41,7 +46,6 @@ bool BicycleDriver::initEthercat() {
 
     ecx_config_map_group(&ecx_context, IOmap, 0);
 
-    // ID verification check
     for (unsigned int i = 0; i < nWheels; i++) {
         int slave = (*wheelConfigs)[i].ethercatNumber;
         if (ecx_slave[slave].eep_id != 24137745 && ecx_slave[slave].eep_id != 0 && 
@@ -54,7 +58,6 @@ bool BicycleDriver::initEthercat() {
     ecx_statecheck(&ecx_context, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE);
     if (ecx_slave[0].state != EC_STATE_SAFE_OP) return false;
 
-    // Send the "Zero Packet" required by the Kelo firmware
     rxpdo1_t zeroData = {0};
     zeroData.timestamp = 1;
     for (unsigned int i = 0; i < nWheels; i++) {
@@ -63,7 +66,6 @@ bool BicycleDriver::initEthercat() {
     }
     ecx_send_processdata(&ecx_context);
 
-    // Request OPERATIONAL
     ecx_slave[0].state = EC_STATE_OPERATIONAL;
     ecx_send_processdata(&ecx_context);
     ecx_receive_processdata(&ecx_context, EC_TIMEOUTRET);
@@ -97,6 +99,17 @@ void BicycleDriver::doControl() {
     txpdo1_t* feedback0 = (txpdo1_t*)ecx_slave[slave0].inputs;
     uint32 current_ts = feedback0->sensor_ts;
 
+    float diffL = target_vL - ramped_vL;
+    float diffR = target_vR - ramped_vR;
+
+    if (diffL > max_v_step) diffL = max_v_step;
+    if (diffL < -max_v_step) diffL = -max_v_step;
+    if (diffR > max_v_step) diffR = max_v_step;
+    if (diffR < -max_v_step) diffR = -max_v_step;
+
+    ramped_vL += diffL;
+    ramped_vR += diffR;
+
     for (unsigned int i = 0; i < nWheels; i++) {
         int slave = (*wheelConfigs)[i].ethercatNumber;
         txpdo1_t* in = (txpdo1_t*) ecx_slave[slave].inputs;
@@ -106,12 +119,17 @@ void BicycleDriver::doControl() {
         out->command1 = COM1_ENABLE1 | COM1_ENABLE2 | COM1_MODE_VELOCITY;
         out->limit1_p = 20.0f; out->limit1_n = -20.0f;
         out->limit2_p = 20.0f; out->limit2_n = -20.0f;
-        out->setpoint1 = target_vL;
-        out->setpoint2 = -target_vR;
+        // out->setpoint1 = target_vL;
+        // out->setpoint2 = -target_vR;
+        out->setpoint1 = ramped_vL;
+        out->setpoint2 = -ramped_vR;
     }
 }
 
 void BicycleDriver::doStop() {
+    ramped_vL = 0.0f;
+    ramped_vR = 0.0f;
+
     for (unsigned int i = 0; i < nWheels; i++) {
         rxpdo1_t* out = (rxpdo1_t*) ecx_slave[(*wheelConfigs)[i].ethercatNumber].outputs;
         out->command1 = COM1_ENABLE1 | COM1_ENABLE2 | COM1_MODE_VELOCITY;
