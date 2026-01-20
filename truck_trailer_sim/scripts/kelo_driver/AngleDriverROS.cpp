@@ -18,13 +18,13 @@ bool useJoy = false;
 void applyTargets(double v, double phi) {
     // 180 flip + CCW convention
     driver->target_linear_v = (float)(-v);
-    driver->target_phi = (float)(-phi);
+    driver->target_phi = (float)(phi);
 }
 
 void joyCallback(const sensor_msgs::Joy::ConstPtr& joy) {
     if (joy->buttons[5]) { // Deadman RB/R1
         useJoy = true;
-        applyTargets(joy->axes[1] * joyVlinMax, joy->axes[0] * -joyPhiMax);
+        applyTargets(joy->axes[1] * joyVlinMax, joy->axes[0] * joyPhiMax);
         driver->setCanChangeActive();
     } else {
         if (useJoy) applyTargets(0.0, 0.0);
