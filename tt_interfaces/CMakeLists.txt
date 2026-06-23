@@ -36,6 +36,8 @@ endif()
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/PolytopeObstacle.msg"
   "msg/PolytopeObstacleArray.msg"
+  "msg/CapsuleObstacle.msg"
+  "msg/CapsuleObstacleArray.msg"
   DEPENDENCIES std_msgs geometry_msgs
 )
 
