@@ -1,0 +1,97 @@
+# =====================================================================
+# tt_capsule.yaml  --  capsule-DCBF tractor-trailer MPC stack
+#
+# The /** wildcard block holds constants EVERY node must agree on
+# (kinematics, footprints, arena walls) so sim / estimator / MPC / viz
+# cannot drift. Per-node blocks follow.
+#
+# NOTE: confirm your Foxy build accepts the /** wildcard for these nodes.
+# If a node does not pick up the shared block, split it into a separate
+# shared.yaml and pass both files on the command line / in the launch file.
+# =====================================================================
+
+/**:
+  ros__parameters:
+    kinematics:
+      L0: 0.42          # tractor wheelbase [m]
+      M0: -0.02         # hitch offset from tractor rear axle [m] (signed)
+      L1: 0.537         # trailer drawbar length [m]
+    footprint:
+      tractor: {length: 0.55, width: 0.35, offset: 0.215}   # offset = body center ahead of tractor rear axle
+      trailer: {length: 0.55, width: 0.35, offset: 0.22}    # offset = body center ahead of trailer axle
+    virtual_walls:
+      enabled: true
+      x_min: -0.9
+      x_max:  1.9
+      y_min: -0.9
+      y_max:  4.9
+
+mpc_capsule_node:
+  ros__parameters:
+    N: 20               # horizon (validated real-time @ N=20; N=40 must be checked on-target)
+    dt: 0.1             # control period [s] -> 10 Hz
+    n_obstacles: 1      # COMPILE-TIME. OCP is built once for this count; closest-n kept online.
+    obstacle_radius: 0.20   # BAKED into the obstacle CBF at build time (homogeneous assumption).
+                            # Must match capsule_obstacle_manager's obstacle radius.
+    rate_hz: 10.0
+
+    limits:
+      V0_max: 0.5       # [m/s]
+      delta0_max: 1.2217   # 70 deg [rad]
+      beta_max: 1.3963     # 80 deg [rad]  (jackknife bound)
+
+    cbf:
+      gamma_obs: 0.5
+      gamma_wall: 0.9
+      gamma_jack: 0.9
+      safe_marg: 0.05      # extra clearance baked into obstacle + wall CBFs [m]
+      softabs_eps: 0.02    # smoothing in the wall support function; conservative (>= |.|)
+
+    cost:
+      Q_x: 1.0
+      Q_y: 1.0
+      Q_th0: 0.0
+      Q_th1: 0.0
+      R_V0: 0.5
+      R_delta0: 0.01
+      R_smooth_V0: 0.2
+      R_smooth_delta0: 0.3
+      P_term_x: 2.0
+      P_term_y: 2.0
+
+    solver:
+      max_iter: 300
+      tol: 1.0e-5
+      # acceptable_* let fatrop terminate at a feasible near-stationary point.
+      # Without slacks the dual residual stalls ~1e-3 and never hits tol before
+      # max_iter (spurious failures). This does NOT relax constraints:
+      # constr_viol_tol stays tight, so the DCBFs / safety are still enforced.
+      acceptable_tol: 1.0e-3
+      acceptable_iter: 5
+      constr_viol_tol: 1.0e-6
+
+    topics:
+      state: /truck_trailer/state          # std_msgs/Float64MultiArray [x1,y1,th0,th1]
+      obstacles: /capsule_obstacles        # tt_interfaces/CapsuleObstacleArray
+      goal: /goal_pose                     # geometry_msgs/PoseStamped
+      cmd_vel: /cmd_vel                     # geometry_msgs/Twist (linear.x=V0, angular.z=delta0)
+
+capsule_obstacle_manager:
+  ros__parameters:
+    rate_hz: 10.0
+    publish_topic: /capsule_obstacles
+    # one entry per tracked obstacle source. radius/length attach the capsule
+    # geometry that the tracker does not provide.
+    obstacle_ids: [0]
+    obstacle_0:
+      topic: /human1/odom_smoothed         # nav_msgs/Odometry (pose in map, twist in base frame)
+      length: 0.50
+      radius: 0.20
+
+capsule_viz_node:
+  ros__parameters:
+    rate_hz: 15.0
+    marker_frame: map
+    state_topic: /truck_trailer/state
+    obstacles_topic: /capsule_obstacles
+    marker_topic: /capsule_markers

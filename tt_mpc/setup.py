@@ -25,6 +25,9 @@ setup(
         'console_scripts': [
             'mpc_node = tt_mpc.mpc_node:main',
             'obstacle_publisher = tt_mpc.obstacle_publisher:main',
+            'mpc_capsule_node = tt_mpc.mpc_capsule_node:main',
+            'capsule_obstacle_manager = tt_mpc.capsule_obstacle_manager:main',
+            'capsule_viz_node = tt_mpc.capsule_viz_node:main',
         ],
     },
 )

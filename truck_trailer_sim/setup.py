@@ -44,6 +44,7 @@ setup(
         'console_scripts': [
             'simulation_node = truck_trailer_sim.simulation_node:main',
             'mppi_planner_node = truck_trailer_sim.mppi_planner_node:main',
+            'sim_obstacle_node = truck_trailer_sim.sim_obstacle_node:main',
         ],
     },
 )
