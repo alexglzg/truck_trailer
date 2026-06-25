@@ -22,8 +22,8 @@
     virtual_walls:
       enabled: true
       x_min: -0.9
-      x_max:  1.9
-      y_min: -0.9
+      x_max:  2.65
+      y_min: -1.25
       y_max:  4.9
 
 mpc_capsule_node:
@@ -36,12 +36,12 @@ mpc_capsule_node:
     rate_hz: 10.0
 
     limits:
-      V0_max: 0.5       # [m/s]
-      delta0_max: 1.2217   # 70 deg [rad]
-      beta_max: 1.3963     # 80 deg [rad]  (jackknife bound)
+      V0_max: 0.3       # [m/s]
+      delta0_max: 1.0471   # 60 deg [rad]
+      beta_max: 1.2217     # 70 deg [rad]  (jackknife bound)
 
     cbf:
-      gamma_obs: 0.5
+      gamma_obs: 0.2
       gamma_wall: 0.9
       gamma_jack: 0.9
       safe_marg: 0.05      # extra clearance baked into obstacle + wall CBFs [m]
@@ -85,12 +85,12 @@ capsule_obstacle_manager:
     obstacle_ids: [0]
     obstacle_0:
       topic: /human1/odom_smoothed         # nav_msgs/Odometry (pose in map, twist in base frame)
-      length: 0.50
-      radius: 0.20
+      length: 0.80
+      radius: 0.25
 
 capsule_viz_node:
   ros__parameters:
-    rate_hz: 15.0
+    rate_hz: 10.0
     marker_frame: map
     state_topic: /truck_trailer/state
     obstacles_topic: /capsule_obstacles

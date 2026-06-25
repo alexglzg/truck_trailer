@@ -19,7 +19,7 @@ class StraightLineHumanSimulator(Node):
         self.start_x = 0.0          # Starting X coordinate [m]
         self.start_y = 2.5          # Starting Y coordinate [m]
         self.heading = 0.0 #-1.5708       # Heading angle [rad] (0.0 = straight along X-axis)
-        self.speed = 0.1            # Constant forward body speed [m/s]
+        self.speed = 0.3            # Constant forward body speed [m/s]
 
         self.get_logger().info(
             f"Straight-line simulator started. Speed: {self.speed}m/s, "

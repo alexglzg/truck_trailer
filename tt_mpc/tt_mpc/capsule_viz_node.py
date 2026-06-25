@@ -49,8 +49,8 @@ class CapsuleVizNode(Node):
         d('footprint.tractor.length', 0.55); d('footprint.tractor.width', 0.35); d('footprint.tractor.offset', 0.215)
         d('footprint.trailer.length', 0.55); d('footprint.trailer.width', 0.35); d('footprint.trailer.offset', 0.22)
         d('virtual_walls.enabled', True)
-        d('virtual_walls.x_min', -0.9); d('virtual_walls.x_max', 1.9)
-        d('virtual_walls.y_min', -0.9); d('virtual_walls.y_max', 4.9)
+        d('virtual_walls.x_min', -0.9); d('virtual_walls.x_max', 2.65)
+        d('virtual_walls.y_min', -1.25); d('virtual_walls.y_max', 4.9)
 
         g = lambda n: self.get_parameter(n).value
         self.frame = g('marker_frame')

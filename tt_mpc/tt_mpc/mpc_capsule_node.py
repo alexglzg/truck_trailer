@@ -77,8 +77,8 @@ class MpcCapsuleNode(Node):
         d('footprint.tractor.length', 0.55); d('footprint.tractor.width', 0.35); d('footprint.tractor.offset', 0.215)
         d('footprint.trailer.length', 0.55); d('footprint.trailer.width', 0.35); d('footprint.trailer.offset', 0.22)
         d('virtual_walls.enabled', True)
-        d('virtual_walls.x_min', -0.9); d('virtual_walls.x_max', 1.9)
-        d('virtual_walls.y_min', -0.9); d('virtual_walls.y_max', 4.9)
+        d('virtual_walls.x_min', -0.9); d('virtual_walls.x_max', 2.65)
+        d('virtual_walls.y_min', -1.25); d('virtual_walls.y_max', 4.9)
         # limits
         d('limits.V0_max', 0.5); d('limits.delta0_max', 1.2217); d('limits.beta_max', 1.3963)
         # cbf
