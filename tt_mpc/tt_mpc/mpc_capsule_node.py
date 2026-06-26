@@ -79,7 +79,7 @@ class MpcCapsuleNode(Node):
         d('virtual_walls.x_min', -0.9); d('virtual_walls.x_max', 2.65)
         d('virtual_walls.y_min', -1.25); d('virtual_walls.y_max', 4.9)
         # limits
-        d('limits.V0_max', 0.5); d('limits.delta0_max', 1.2217); d('limits.beta_max', 1.3963)
+        d('limits.V0_max', 0.5); d('limits.delta0_max', 1.2217); d('limits.beta_max', 0.75)
         # cbf
         d('cbf.gamma_obs', 0.5); d('cbf.gamma_wall', 0.9); d('cbf.gamma_jack', 0.9)
         d('cbf.safe_marg', 0.05); d('cbf.softabs_eps', 0.02)

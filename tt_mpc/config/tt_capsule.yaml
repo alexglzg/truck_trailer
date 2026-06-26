@@ -17,8 +17,8 @@
       M0: -0.02         # hitch offset from tractor rear axle [m] (signed)
       L1: 0.537         # trailer drawbar length [m]
     footprint:
-      tractor: {length: 0.55, width: 0.35, offset: 0.215}   # offset = body center ahead of tractor rear axle
-      trailer: {length: 0.55, width: 0.35, offset: 0.22}    # offset = body center ahead of trailer axle
+      tractor: {length: 0.55, width: 0.40, offset: 0.215}   # offset = body center ahead of tractor rear axle
+      trailer: {length: 0.55, width: 0.40, offset: 0.22}    # offset = body center ahead of trailer axle
     virtual_walls:
       enabled: true
       x_min: -0.9
@@ -35,13 +35,13 @@ mpc_capsule_node:
 
     limits:
       V0_max: 0.3       # [m/s]
-      delta0_max: 1.0471   # 60 deg [rad]
-      beta_max: 0.75 #1.2217    # 70 deg [rad]  (jackknife bound)
+      delta0_max: 1.2217 #1.0471   # 60 deg [rad]
+      beta_max: 0.5 #1.2217    # 70 deg [rad]  (jackknife bound)
 
     cbf:
       gamma_obs: 0.2
-      gamma_wall: 0.9
-      gamma_jack: 0.5
+      gamma_wall: 0.2
+      gamma_jack: 0.1
       safe_marg: 0.05      # extra clearance baked into obstacle + wall CBFs [m]
       softabs_eps: 0.02    # smoothing in the wall support function; conservative (>= |.|)
 
@@ -50,10 +50,10 @@ mpc_capsule_node:
       Q_y: 1.0
       Q_th0: 0.0
       Q_th1: 0.0
-      R_V0: 0.5
-      R_delta0: 0.01
-      R_smooth_V0: 0.2
-      R_smooth_delta0: 0.3
+      R_V0: 1.0 #0.5
+      R_delta0: 0.05 #0.01
+      R_smooth_V0: 0.8 #0.2
+      R_smooth_delta0: 0.8 #0.3
       P_term_x: 2.0
       P_term_y: 2.0
 
