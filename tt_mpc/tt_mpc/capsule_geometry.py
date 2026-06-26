@@ -64,3 +64,38 @@ def stadium_outline(p, q, R, n_arc=10):
 def box_outline(x_min, x_max, y_min, y_max):
     return np.array([[x_min, y_min], [x_max, y_min], [x_max, y_max],
                      [x_min, y_max], [x_min, y_min]])
+
+
+def rect_outline(center, theta, length, width):
+    """Closed 5-point polyline of a body footprint rectangle (LINE_STRIP)."""
+    c, s = np.cos(theta), np.sin(theta)
+    ax = np.array([c, s])          # along body axis
+    ay = np.array([-s, c])         # lateral
+    hl, hw = 0.5 * length, 0.5 * width
+    center = np.asarray(center, float)
+    corners = [center + hl * ax + hw * ay,
+               center + hl * ax - hw * ay,
+               center - hl * ax - hw * ay,
+               center - hl * ax + hw * ay]
+    corners.append(corners[0])
+    return np.array(corners)
+
+
+def skeleton_points(state, L0, M0, L1, tractor_off, trailer_off):
+    """Kinematic points of interest (map frame). Mirrors the offset chain used
+    by the capsule formulas: trailer axle -> hitch -> truck axle, plus the two
+    body centers and the front steering axle."""
+    x1, y1, th0, th1 = state
+    d1 = np.array([np.cos(th1), np.sin(th1)])
+    d0 = np.array([np.cos(th0), np.sin(th0)])
+    trailer_axle = np.array([x1, y1])
+    hitch = trailer_axle + L1 * d1
+    truck_axle = hitch + M0 * d0
+    return dict(
+        trailer_axle=trailer_axle,
+        trailer_center=trailer_axle + trailer_off * d1,
+        hitch=hitch,
+        truck_axle=truck_axle,
+        tractor_center=truck_axle + tractor_off * d0,
+        front_axle=truck_axle + L0 * d0,
+    )

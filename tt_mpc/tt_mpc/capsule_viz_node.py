@@ -35,6 +35,35 @@ def _line_strip(ns, mid, frame, pts, rgba, width=0.02):
     return m
 
 
+def _sphere(ns, mid, frame, pt, rgba, d=0.05):
+    m = Marker()
+    m.header.frame_id = frame
+    m.ns = ns
+    m.id = mid
+    m.type = Marker.SPHERE
+    m.action = Marker.ADD
+    m.scale.x = m.scale.y = m.scale.z = d
+    m.color.r, m.color.g, m.color.b, m.color.a = rgba
+    m.pose.orientation.w = 1.0
+    m.pose.position.x = float(pt[0]); m.pose.position.y = float(pt[1]); m.pose.position.z = 0.0
+    return m
+
+
+def _text(ns, mid, frame, pt, text, rgba=(0.85, 0.85, 0.85, 0.9), h=0.10):
+    m = Marker()
+    m.header.frame_id = frame
+    m.ns = ns
+    m.id = mid
+    m.type = Marker.TEXT_VIEW_FACING
+    m.action = Marker.ADD
+    m.scale.z = h
+    m.color.r, m.color.g, m.color.b, m.color.a = rgba
+    m.pose.orientation.w = 1.0
+    m.pose.position.x = float(pt[0]); m.pose.position.y = float(pt[1]); m.pose.position.z = 0.18
+    m.text = text
+    return m
+
+
 class CapsuleVizNode(Node):
     def __init__(self):
         super().__init__('capsule_viz_node')
@@ -93,6 +122,25 @@ class CapsuleVizNode(Node):
             arr.markers.append(_line_strip('trailer', 0, self.frame,
                                            geom.stadium_outline(pTr, qTr, self.tl['W'] / 2.0),
                                            (0.1, 0.7, 0.3, 0.9)))
+
+            # --- skeleton layer: footprint rectangles + points of interest ---
+            sk = geom.skeleton_points(self.state, self.L0, self.M0, self.L1,
+                                      self.tr['off'], self.tl['off'])
+            arr.markers.append(_line_strip('truck_footprint', 0, self.frame,
+                geom.rect_outline(sk['tractor_center'], self.state[2], self.tr['L'], self.tr['W']),
+                (0.1, 0.4, 0.9, 0.9), 0.015))
+            arr.markers.append(_line_strip('trailer_footprint', 0, self.frame,
+                geom.rect_outline(sk['trailer_center'], self.state[3], self.tl['L'], self.tl['W']),
+                (0.1, 0.7, 0.3, 0.9), 0.015))
+            poi = [('trailer_axle', (0.40, 0.70, 0.20, 1.0)),
+                   ('hitch',        (0.95, 0.62, 0.15, 1.0)),
+                   ('truck_axle',   (0.22, 0.54, 0.87, 1.0)),
+                   ('front_axle',   (0.50, 0.47, 0.87, 1.0))]
+            for i, (key, rgba) in enumerate(poi):
+                arr.markers.append(_sphere('poi', i, self.frame, sk[key], rgba, 0.05))
+                arr.markers.append(_text('poi_labels', i, self.frame, sk[key], key, h=0.08))
+            for i, key in enumerate(('tractor_center', 'trailer_center')):
+                arr.markers.append(_sphere('centers', i, self.frame, sk[key], (0.7, 0.7, 0.7, 0.9), 0.035))
 
         for i, (x, y, psi, length, radius) in enumerate(self.obstacles):
             pO, qO = geom.obstacle_capsule(x, y, psi, length)
