@@ -27,6 +27,19 @@ def trailer_capsule(state, off, length):
     return c - 0.5 * length * d, c + 0.5 * length * d, c, th1
 
 
+def seg_seg_sq_dist(p1, q1, p2, q2):
+    """Numpy mirror of the symbolic seg_seg_sq_dist_sym in capsule_mpc.py."""
+    p1, q1, p2, q2 = (np.asarray(a, float) for a in (p1, q1, p2, q2))
+    d1, d2, r = q1 - p1, q2 - p2, p1 - p2
+    a, e, f, c, b = d1 @ d1, d2 @ d2, d2 @ r, d1 @ r, d1 @ d2
+    denom = a * e - b * b + 1e-9
+    s = np.clip((b * f - c * e) / denom, 0.0, 1.0)
+    t = np.clip((b * s + f) / (e + 1e-9), 0.0, 1.0)
+    s = np.clip((b * t - c) / (a + 1e-9), 0.0, 1.0)
+    diff = (p1 + s * d1) - (p2 + t * d2)
+    return diff @ diff
+
+
 def obstacle_capsule(x, y, psi, length):
     """-> (p, q) endpoints for an obstacle capsule."""
     cp, sp = np.cos(psi), np.sin(psi)

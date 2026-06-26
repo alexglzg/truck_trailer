@@ -31,8 +31,6 @@ mpc_capsule_node:
     N: 20               # horizon (validated real-time @ N=20; N=40 must be checked on-target)
     dt: 0.1             # control period [s] -> 10 Hz
     n_obstacles: 1      # COMPILE-TIME. OCP is built once for this count; closest-n kept online.
-    obstacle_radius: 0.30   # BAKED into the obstacle CBF at build time (homogeneous assumption).
-                            # Must match capsule_obstacle_manager's obstacle radius.
     rate_hz: 10.0
 
     limits:

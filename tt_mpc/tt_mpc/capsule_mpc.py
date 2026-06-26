@@ -142,7 +142,6 @@ class CapsuleMPC:
         'V0_max', 'delta0_max', 'beta_max',
         'gamma_obs', 'gamma_wall', 'gamma_jack',
         'safe_marg', 'softabs_eps',
-        'obstacle_radii',
         'Q_x', 'Q_y', 'Q_th0', 'Q_th1',
         'R_V0', 'R_delta0', 'R_smooth_V0', 'R_smooth_delta0',
         'P_term_x', 'P_term_y',
@@ -154,8 +153,6 @@ class CapsuleMPC:
         for k in self.REQUIRED:
             if k not in cfg:
                 raise KeyError(f"CapsuleMPC cfg missing '{k}'")
-        assert len(cfg['obstacle_radii']) == cfg['n_obstacles'], \
-            "len(obstacle_radii) must equal n_obstacles"
 
         self.cfg = cfg
         N = self.N = int(cfg['N'])
@@ -170,11 +167,6 @@ class CapsuleMPC:
         gob, gwl, gjk = cfg['gamma_obs'], cfg['gamma_wall'], cfg['gamma_jack']
         beta_max_sq = cfg['beta_max'] ** 2
 
-        # combined radii BAKED at build time (not parameters) so fatrop's
-        # structure detector does not see a phantom cross-stage scalar.
-        Rc_T = [R_T + r + marg for r in cfg['obstacle_radii']]
-        Rc_Tr = [R_Tr + r + marg for r in cfg['obstacle_radii']]
-
         opti = ca.Opti()
 
         # --- parameters ---
@@ -184,6 +176,7 @@ class CapsuleMPC:
         # one (2, N+1) endpoint-trajectory parameter PER obstacle (fatrop staging)
         p_pB = [opti.parameter(2, N + 1) for _ in range(n_obs)]
         p_qB = [opti.parameter(2, N + 1) for _ in range(n_obs)]
+        p_Robs = opti.parameter(n_obs)   # obstacle radii, set per tick
 
         # --- decision variables, interleaved X[0],U[0],X[1],U[1],...,X[N] ---
         X, U = [], []
@@ -229,12 +222,12 @@ class CapsuleMPC:
                 pBk, qBk = p_pB[i][:, k], p_qB[i][:, k]
                 pBn, qBn = p_pB[i][:, k + 1], p_qB[i][:, k + 1]
 
-                hT_k = ca.sqrt(seg_seg_sq_dist_sym(pT_k, qT_k, pBk, qBk) + 1e-9) - Rc_T[i]
-                hT_n = ca.sqrt(seg_seg_sq_dist_sym(pT_n, qT_n, pBn, qBn) + 1e-9) - Rc_T[i]
+                hT_k  = ca.sqrt(seg_seg_sq_dist_sym(pT_k,  qT_k,  pBk, qBk) + 1e-9) - (R_T  + p_Robs[i] + marg)
+                hT_n  = ca.sqrt(seg_seg_sq_dist_sym(pT_n,  qT_n,  pBn, qBn) + 1e-9) - (R_T  + p_Robs[i] + marg)
                 opti.subject_to(hT_n >= (1.0 - gob) * hT_k)
 
-                hTr_k = ca.sqrt(seg_seg_sq_dist_sym(pTr_k, qTr_k, pBk, qBk) + 1e-9) - Rc_Tr[i]
-                hTr_n = ca.sqrt(seg_seg_sq_dist_sym(pTr_n, qTr_n, pBn, qBn) + 1e-9) - Rc_Tr[i]
+                hTr_k = ca.sqrt(seg_seg_sq_dist_sym(pTr_k, qTr_k, pBk, qBk) + 1e-9) - (R_Tr + p_Robs[i] + marg)
+                hTr_n = ca.sqrt(seg_seg_sq_dist_sym(pTr_n, qTr_n, pBn, qBn) + 1e-9) - (R_Tr + p_Robs[i] + marg)
                 opti.subject_to(hTr_n >= (1.0 - gob) * hTr_k)
                 n_cbf_rows += 2
 
@@ -278,6 +271,7 @@ class CapsuleMPC:
         self.X, self.U = X, U
         self.p_X0, self.p_goal, self.p_Uprev = p_X0, p_goal, p_Uprev
         self.p_pB, self.p_qB = p_pB, p_qB
+        self.p_Robs = p_Robs
         self.cbf_rows = n_cbf_rows
         self._warm_X = None
         self._warm_U = None
@@ -318,7 +312,7 @@ class CapsuleMPC:
     # ------------------------------------------------------------------
     def _set_obstacle_params(self, obstacles):
         """obstacles: list of dicts (len == n_obs) with keys
-        pos (2,), vel (2,), psi, length. Constant-velocity rollout."""
+        pos (2,), vel (2,), psi, length, radius. Constant-velocity rollout."""
         N, dt = self.N, self.dt
         for i, ob in enumerate(obstacles):
             pB = np.zeros((2, N + 1))
@@ -332,6 +326,7 @@ class CapsuleMPC:
                 qB[:, j] = qe
             self.opti.set_value(self.p_pB[i], pB)
             self.opti.set_value(self.p_qB[i], qB)
+        self.opti.set_value(self.p_Robs, [float(ob['radius']) for ob in obstacles])
 
     def solve(self, x0, goal, u_prev, obstacles):
         """Returns dict: ok, u (2,), X (4,N+1), t_wall_total, iters."""

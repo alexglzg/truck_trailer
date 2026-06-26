@@ -70,7 +70,6 @@ class MpcCapsuleNode(Node):
         d('N', 20)
         d('dt', 0.1)
         d('n_obstacles', 1)
-        d('obstacle_radius', 0.20)
         d('rate_hz', 10.0)
         # kinematics / footprint / walls (shared /** block)
         d('kinematics.L0', 0.42); d('kinematics.M0', -0.02); d('kinematics.L1', 0.537)
@@ -106,7 +105,6 @@ class MpcCapsuleNode(Node):
         self._rate_hz = float(self._g('rate_hz'))
         self._topics = {k: self._g(f'topics.{k}') for k in ('state', 'obstacles', 'goal', 'cmd_vel')}
         n_obs = int(self._g('n_obstacles'))
-        r_obs = float(self._g('obstacle_radius'))
         return dict(
             N=int(self._g('N')), dt=float(self._g('dt')), n_obstacles=n_obs,
             L0=self._g('kinematics.L0'), M0=self._g('kinematics.M0'), L1=self._g('kinematics.L1'),
@@ -121,7 +119,6 @@ class MpcCapsuleNode(Node):
             gamma_obs=self._g('cbf.gamma_obs'), gamma_wall=self._g('cbf.gamma_wall'),
             gamma_jack=self._g('cbf.gamma_jack'),
             safe_marg=self._g('cbf.safe_marg'), softabs_eps=self._g('cbf.softabs_eps'),
-            obstacle_radii=[r_obs] * n_obs,
             Q_x=self._g('cost.Q_x'), Q_y=self._g('cost.Q_y'),
             Q_th0=self._g('cost.Q_th0'), Q_th1=self._g('cost.Q_th1'),
             R_V0=self._g('cost.R_V0'), R_delta0=self._g('cost.R_delta0'),
@@ -157,26 +154,26 @@ class MpcCapsuleNode(Node):
     # ------------------------------------------------------------------
     # obstacle selection / padding
     # ------------------------------------------------------------------
-    def _body_centers(self, state):
-        _, _, cT, _ = geom.tractor_capsule(state, self.cfg['L0'], self.cfg['M0'], self.cfg['L1'],
-                                            self.cfg['tractor_off'], self.cfg['tractor_len'])
-        _, _, cTr, _ = geom.trailer_capsule(state, self.cfg['trailer_off'], self.cfg['trailer_len'])
-        return cT, cTr
-
     def _select_obstacles(self, state):
-        """Return exactly n_obstacles dicts: closest by current distance, padded
-        with far-parked dummies if fewer were seen."""
+        """Return exactly n_obstacles dicts: closest by true boundary distance
+        (seg-seg minus both radii, min over tractor and trailer), padded with
+        far-parked dummies if fewer were seen."""
         n = self.cfg['n_obstacles']
-        cT, cTr = self._body_centers(state)
+        pT, qT, _, _ = geom.tractor_capsule(state, self.cfg['L0'], self.cfg['M0'], self.cfg['L1'],
+                                             self.cfg['tractor_off'], self.cfg['tractor_len'])
+        pTr, qTr, _, _ = geom.trailer_capsule(state, self.cfg['trailer_off'], self.cfg['trailer_len'])
+        R_T, R_Tr = self.cfg['tractor_wid'] / 2.0, self.cfg['trailer_wid'] / 2.0
         scored = []
         for o in self.obstacles:
-            d = min(np.linalg.norm(cT - o['pos']), np.linalg.norm(cTr - o['pos']))
-            scored.append((d, o))
+            pO, qO = geom.obstacle_capsule(o['pos'][0], o['pos'][1], o['psi'], o['length'])
+            hT  = np.sqrt(geom.seg_seg_sq_dist(pT,  qT,  pO, qO)) - R_T  - o['radius']
+            hTr = np.sqrt(geom.seg_seg_sq_dist(pTr, qTr, pO, qO)) - R_Tr - o['radius']
+            scored.append((min(hT, hTr), o))
         scored.sort(key=lambda s: s[0])
         chosen = [o for _, o in scored[:n]]
         while len(chosen) < n:
             chosen.append(dict(pos=np.array([1.0e3, 1.0e3]), vel=np.zeros(2),
-                               psi=0.0, length=0.55, radius=self.cfg['obstacle_radii'][0]))
+                               psi=0.0, length=0.55, radius=0.0))
         return chosen
 
     # ------------------------------------------------------------------
