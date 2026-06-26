@@ -38,12 +38,12 @@ mpc_capsule_node:
     limits:
       V0_max: 0.3       # [m/s]
       delta0_max: 1.0471   # 60 deg [rad]
-      beta_max: 0.75     # 70 deg [rad]  (jackknife bound)
+      beta_max: 0.75 #1.2217    # 70 deg [rad]  (jackknife bound)
 
     cbf:
-      gamma_obs: 0.1
+      gamma_obs: 0.2
       gamma_wall: 0.9
-      gamma_jack: 0.2
+      gamma_jack: 0.5
       safe_marg: 0.05      # extra clearance baked into obstacle + wall CBFs [m]
       softabs_eps: 0.02    # smoothing in the wall support function; conservative (>= |.|)
 
