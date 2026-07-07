@@ -196,7 +196,8 @@ class CapsuleMPC:
             opti.subject_to(X[k + 1] == xn)
 
             # input box bounds (cannot themselves cause infeasibility)
-            opti.subject_to(opti.bounded(-cfg['V0_max'], uk[0], cfg['V0_max']))
+            opti.subject_to(opti.bounded(-0.3, uk[0], cfg['V0_max']))
+            # opti.subject_to(opti.bounded(-cfg['V0_max'], uk[0], cfg['V0_max']))
             opti.subject_to(opti.bounded(-cfg['delta0_max'], uk[1], cfg['delta0_max']))
 
             # ---- cost ----
